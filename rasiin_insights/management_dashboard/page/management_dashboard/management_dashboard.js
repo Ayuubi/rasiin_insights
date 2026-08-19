@@ -34,6 +34,12 @@ const GROUPS = [
 			  sign: -1, note: 'Given on the invoice' },
 			{ key: 'return', label: 'Less: returns', metric: 'return', sign: -1,
 			  note: 'Credit notes' },
+			{ key: 'return_discount', label: 'Add back: discount on returns',
+			  metric: 'return_discount', muted: true,
+			  note: 'Discount reversed when the return was booked' },
+			{ key: 'revenue_reclass', label: 'Less: reclassified to another company',
+			  metric: 'revenue_reclass', sign: -1, muted: true,
+			  note: 'Booked by Journal Entry, moved to a different company — see Control Panel' },
 			{ key: 'net_sales', label: 'Net sales', strong: true,
 			  note: 'What the ledger calls income' }
 		]
@@ -96,6 +102,8 @@ const DRILL_METRICS = [
 	['collection_current', 'Collected — this period only'],
 	['collection_prior', 'Collected — older debt only'],
 	['collection_unallocated', 'Collected — not matched'],
+	['return_discount', 'Discount on returns'],
+	['revenue_reclass', 'Reclassified to another company'],
 	['payment_discount', 'Discount at payment'],
 	['commission', 'Doctor commission'],
 	['payroll', 'Staff payroll'],
@@ -103,11 +111,28 @@ const DRILL_METRICS = [
 	['commission,payroll,expense', 'Total expense'],
 	['refund', 'Refunds'],
 	['ar_transfer_in', 'Debt created'],
-	['ar_transfer_out', 'Debt cleared']
+	['ar_transfer_out', 'Debt cleared'],
+	['payable_charged', 'Owed by us — charged'],
+	['supplier_payment', 'Owed by us — paid']
 ];
 
 const MONTH_NAME = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
 	'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+
+// Daily trend metric choices. Flow metrics only — see DAILY_METRICS in
+// api.py for why balances (ar_closing/ap_closing) are not offered here.
+const DAILY_METRICS = [
+	['gross_sales', 'Gross sales'],
+	['discount', 'Discount given'],
+	['return', 'Returns'],
+	['collection_current,collection_prior,collection_unallocated', 'Money received'],
+	['commission', 'Doctor commission'],
+	['payroll', 'Staff payroll'],
+	['expense', 'Other expense'],
+	['refund', 'Refunds'],
+	['ar_transfer_in', 'Debt created'],
+	['payable_charged', 'Payable charged']
+];
 
 class ManagementDashboard {
 	constructor(page) {
@@ -115,7 +140,8 @@ class ManagementDashboard {
 		this.state = {
 			mode: 'compare', granularity: 'Monthly', company: null,
 			period_label: null, a_label: null, b_label: null,
-			drill_metric: 'gross_sales', drill_dimension: 'Item Group'
+			drill_metric: 'gross_sales', drill_dimension: 'Item Group',
+			daily_metric: 'gross_sales'
 		};
 	}
 
@@ -127,7 +153,9 @@ class ManagementDashboard {
 		this.build_layout();
 		this.build_filter_bar();
 		this.rebuild_period_options();
+		this.render_daily_controls();
 		this.refresh();
+		this.refresh_daily();
 	}
 
 	call(method, args) {
@@ -227,6 +255,7 @@ class ManagementDashboard {
 				const v = this.f_company.get_value();
 				this.state.company = (v === 'All companies') ? null : v;
 				this.refresh();
+				this.refresh_daily();
 			}
 		});
 
@@ -247,6 +276,11 @@ class ManagementDashboard {
 		this.f_period.set_value(this.state.period_label);
 		this.f_a.set_value(this.state.a_label);
 		this.f_b.set_value(this.state.b_label);
+		// f.refresh() above re-renders each control's wrapper and silently
+		// undoes whatever display:none sync_filter_visibility() had set —
+		// that was the whole bug: every field showing in both modes. Re-hide
+		// after every rebuild, not just once at page load.
+		this.sync_filter_visibility();
 	}
 
 	sync_filter_visibility() {
@@ -307,6 +341,23 @@ class ManagementDashboard {
 						<div class="rd-panel-note">Top six, everything else grouped</div>
 					</div>
 					<div class="rd-drill-trend"></div>
+				</div>
+
+				<div class="rd-panel">
+					<div class="rd-panel-head">
+						<div class="rd-panel-title">Daily trend</div>
+						<div class="rd-daily-controls"></div>
+						<div class="rd-panel-note rd-daily-total"></div>
+					</div>
+					<div class="rd-daily-chart"></div>
+
+					<div class="rd-panel-head" style="margin-top:20px">
+						<div class="rd-panel-title">Day by day</div>
+						<div class="rd-panel-note">Same story as the table above, one column
+							per day. Receivables are month-end only — see Compare for those.</div>
+						<button class="rd-btn rd-export-daily">Export CSV</button>
+					</div>
+					<div class="rd-daily-table"></div>
 				</div>
 			</div>
 			<style>
@@ -421,6 +472,13 @@ class ManagementDashboard {
 			.rd-bar-mini { height:3px; background:var(--navy); border-radius:2px;
 				margin-top:4px; opacity:.75; }
 
+			.rd-daily-controls { display:flex; align-items:center; gap:8px; flex-wrap:wrap; }
+			.rd-daily-controls input[type=date] { padding:5px 8px; border-radius:8px;
+				border:1px solid var(--line); font-size:12px; background:#fff; }
+			.rd-daily-controls select { padding:6px 10px; border-radius:8px;
+				border:1px solid var(--line); font-size:12px; background:#fff; }
+			.rd-daily-total { font-weight:600; }
+
 			@media (max-width:1000px) {
 				.rd-drill-row { grid-template-columns:1fr; }
 				.rd-hval { font-size:23px; }
@@ -454,6 +512,7 @@ class ManagementDashboard {
 
 		this.$c.find('.rd-export-main').on('click', () => this.export_main());
 		this.$c.find('.rd-export-drill').on('click', () => this.export_drill());
+		this.$c.find('.rd-export-daily').on('click', () => this.export_daily());
 	}
 
 	// --------------------------------------------------------------- render
@@ -659,7 +718,29 @@ class ManagementDashboard {
 			body += `<p><b>Formula</b><br><code>${key} = ${derived[key]}</code></p>`;
 		}
 		if (!body) body = '<p>Derived from the figures above it.</p>';
-		frappe.msgprint({ title: label, message: body, wide: true });
+
+		// The story continues here: "what does this mean" and "show me the
+		// report behind it" are two different questions. This dialog answers
+		// the first; its primary action jumps straight into the drill-down
+		// panel already filtered on this exact metric, answering the second.
+		const dialog = new frappe.ui.Dialog({ title: label, fields: [
+			{ fieldtype: 'HTML', options: body }
+		] });
+		if (metric) {
+			dialog.set_primary_action('See the breakdown', () => {
+				dialog.hide();
+				this.jump_to_drill(metric, label);
+			});
+		}
+		dialog.show();
+	}
+
+	jump_to_drill(metric, label) {
+		this.state.drill_metric = metric;
+		this.render_drill_controls();
+		this.refresh_drill();
+		const el = this.$c.find('.rd-drill-row')[0];
+		if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
 	}
 
 	async render_trend(buckets) {
@@ -703,6 +784,107 @@ class ManagementDashboard {
 		this.$c.find('.rd-dimension').on('change', e => {
 			this.state.drill_dimension = e.target.value; this.refresh_drill();
 		});
+	}
+
+	// ---------------------------------------------------------- daily trend
+
+	render_daily_controls() {
+		/* Independent of the Period/Compare filters above — its own date
+		   range, defaulting to the last 30 days. That decouples "what month
+		   am I looking at" from "show me day by day", which is what was
+		   actually asked for (Question 31 in the catalog), not a full daily
+		   version of the whole page. */
+		const today = frappe.datetime.get_today();
+		const from = frappe.datetime.add_days(today, -29);
+		this.$c.find('.rd-daily-controls').html(`
+			<input type="date" class="rd-daily-from" value="${from}">
+			<span style="font-size:12px;color:var(--dim)">to</span>
+			<input type="date" class="rd-daily-to" value="${today}">
+			<select class="rd-daily-metric">${DAILY_METRICS.map(([v, l]) =>
+				`<option value="${v}" ${v === this.state.daily_metric ? 'selected' : ''}>${l}</option>`
+			).join('')}</select>`);
+		this.$c.find('.rd-daily-from, .rd-daily-to').on('change', () => this.refresh_daily());
+		this.$c.find('.rd-daily-metric').on('change', (e) => {
+			this.state.daily_metric = e.target.value;
+			this.refresh_daily();
+		});
+	}
+
+	async refresh_daily() {
+		const from = this.$c.find('.rd-daily-from').val();
+		const to = this.$c.find('.rd-daily-to').val();
+		if (!from || !to) return;
+		const [trend, summary] = await Promise.all([
+			this.call('get_daily_trend', { from_date: from, to_date: to,
+				metric: this.state.daily_metric, company: this.state.company }),
+			this.call('get_daily_summary', { from_date: from, to_date: to,
+				company: this.state.company })
+		]);
+		this.render_daily_chart(trend);
+		this.render_daily_table(summary.days, summary.total);
+	}
+
+	render_daily_chart(res) {
+		this.$c.find('.rd-daily-total').text(`Total: ${this.money(res.total)}`);
+		new frappe.Chart(this.$c.find('.rd-daily-chart')[0], {
+			data: { labels: res.dates, datasets: [{ name: 'Amount', values: res.values }] },
+			type: 'line', height: 220, colors: ['#1e3a5f'],
+			lineOptions: { hideDots: 0, regionFill: 1 },
+			tooltipOptions: { formatTooltipY: d => this.money(d) }
+		});
+	}
+
+	day_label(date_str) {
+		const [y, m, d] = date_str.split('-');
+		return `${MONTH_NAME[parseInt(m, 10) - 1]} ${parseInt(d, 10)}`;
+	}
+
+	render_daily_table(days, total) {
+		/* Exactly the Compare table's shape — same GROUPS, same signs, same
+		   formulas — just one column per day instead of two columns for two
+		   periods. Receivables are dropped: there is no daily balance. */
+		const groups = GROUPS.filter(g => g.title !== 'What we owe, what we are owed');
+
+		this.daily_table_rows = [['Figure'].concat(days.map(d => this.day_label(d.date)), 'Total')];
+
+		let html = `<div class="rd-scroll"><table class="rd-tbl">
+			<thead><tr><th>Figure</th>${days.map(d =>
+				`<th>${this.day_label(d.date)}</th>`).join('')}<th>Total</th></tr></thead>
+			<tbody>`;
+
+		groups.forEach(g => {
+			html += `<tr class="rd-grp ${g.tone}"><td colspan="${days.length + 2}">${g.title}</td></tr>`;
+			this.daily_table_rows.push([g.title]);
+
+			g.lines.forEach(line => {
+				const is_pct = g.pct || line.raw_pct;
+				const fmt = v => is_pct ? this.pct(v) : this.money(line.sign === -1 ? -v : v);
+				const vals = days.map(d => this.value_of(d, line));
+				const tot = this.value_of(total, line);
+				const cls = [line.strong ? 'rd-strong' : '', line.muted ? 'rd-muted' : ''
+					].filter(Boolean).join(' ');
+
+				html += `<tr class="${cls}">
+					<td>${line.label}${line.warn ? '<span class="rd-flag">!</span>' : ''}</td>
+					${vals.map(v => `<td class="${line.sign === -1 ? 'rd-neg' : ''}">${fmt(v)}</td>`).join('')}
+					<td class="${line.sign === -1 ? 'rd-neg' : ''}">${fmt(tot)}</td></tr>`;
+
+				this.daily_table_rows.push([line.label].concat(
+					vals.map(v => is_pct ? (v * 100).toFixed(2) : v.toFixed(2)),
+					is_pct ? (tot * 100).toFixed(2) : tot.toFixed(2)));
+			});
+		});
+
+		html += '</tbody></table></div>';
+		this.$c.find('.rd-daily-table').html(html);
+	}
+
+	export_daily() {
+		if (!this.daily_table_rows) return;
+		const from = this.$c.find('.rd-daily-from').val();
+		const to = this.$c.find('.rd-daily-to').val();
+		this.download(this.daily_table_rows,
+			`daily_${from}_to_${to}.csv`.replace(/[^\w.\-]+/g, '_'));
 	}
 
 	blank_label(dimension) {
@@ -854,603 +1036,3 @@ class ManagementDashboard {
 
 	pct(v) { return (flt(v) * 100).toFixed(1) + '%'; }
 }
-
-// /*
-//  * Management Dashboard — page controller (v2).
-//  *
-//  * Path: rasiin_insights/management_dashboard/page/management_dashboard/
-//  *         management_dashboard.js
-//  *
-//  * TWO VIEWS, ONE PAGE
-//  *   Compare  periods side by side, metrics as rows — the Excel model, for
-//  *            spotting a trend without hunting for it.
-//  *   Focus    one period, grouped cards that read like a sentence:
-//  *            gross, less discount, less returns, equals net sales.
-//  *
-//  * FILTERS COOPERATE
-//  *   Choosing "Quarterly" repopulates the period list with quarters. No more
-//  *   setting From and To to the same value to see one month.
-//  *
-//  * EVERY NUMBER EXPLAINS ITSELF
-//  *   Click any card or any row label: what it means, where it comes from, the
-//  *   formula, and the caveat — read live from the metric registry, so it can
-//  *   never drift from the code that produces the number.
-//  */
-
-// frappe.pages['management-dashboard'].on_page_load = function (wrapper) {
-// 	const page = frappe.ui.make_app_page({
-// 		parent: wrapper, title: 'Management Dashboard', single_column: true
-// 	});
-// 	new ManagementDashboard(page).init();
-// };
-
-// // Rows of the Compare table and the groups of the Focus view, in reading
-// // order. `calc` keys come from api._derive; `metric` links to the registry.
-// const GROUPS = [
-// 	{
-// 		title: 'Revenue', tone: 'rev', lines: [
-// 			{ key: 'gross_sales', label: 'Gross sales', metric: 'gross_sales',
-// 			  note: 'Before any discount' },
-// 			{ key: 'discount', label: 'Less: discount given', metric: 'discount',
-// 			  sign: -1, note: 'Given on the invoice' },
-// 			{ key: 'return', label: 'Less: returns', metric: 'return', sign: -1,
-// 			  note: 'Credit notes' },
-// 			{ key: 'net_sales', label: 'Net sales', strong: true,
-// 			  note: 'What the ledger calls income' }
-// 		]
-// 	},
-// 	{
-// 		title: 'Money in', tone: 'cash', lines: [
-// 			{ key: 'collection_current', label: 'This period\'s invoices',
-// 			  metric: 'collection_current' },
-// 			{ key: 'collection_prior', label: 'Older debt', metric: 'collection_prior' },
-// 			{ key: 'collection_unallocated', label: 'Not matched to an invoice',
-// 			  metric: 'collection_unallocated', warn: true },
-// 			{ key: 'total_collections', label: 'Money received', strong: true },
-// 			{ key: 'payment_discount', label: 'Memo: written off at payment',
-// 			  metric: 'payment_discount', muted: true }
-// 		]
-// 	},
-// 	{
-// 		title: 'Money out', tone: 'out', lines: [
-// 			{ key: 'commission', label: 'Doctor commission', metric: 'commission' },
-// 			{ key: 'payroll', label: 'Staff payroll', metric: 'payroll' },
-// 			{ key: 'expense', label: 'Other expense', metric: 'expense' },
-// 			{ key: 'refund', label: 'Refunds', metric: 'refund' },
-// 			{ key: 'money_out', label: 'Money out', strong: true },
-// 			{ key: 'net_cash', label: 'Net cash movement', strong: true,
-// 			  note: 'Received less everything paid out' }
-// 		]
-// 	},
-// 	{
-// 		title: 'What we owe, what we are owed', tone: 'owe', lines: [
-// 			{ key: 'ar_closing', label: 'Owed to us', metric: 'ar_transfer_in',
-// 			  note: 'Closing receivable' },
-// 			{ key: 'ap_closing', label: 'Owed by us', metric: 'payable_charged',
-// 			  note: 'Closing payable' }
-// 		]
-// 	},
-// 	{
-// 		title: 'Ratios', tone: 'ratio', pct: true, lines: [
-// 			{ key: 'discount_pct', label: 'Discount as % of gross', warn: true },
-// 			{ key: 'return_pct', label: 'Returns as % of gross' },
-// 			{ key: 'collection_efficiency', label: 'Collection efficiency',
-// 			  note: 'Received divided by net sales' },
-// 			{ key: 'quality_score', label: 'Collections traced', raw_pct: true,
-// 			  note: 'Share that could be tied to a service' }
-// 		]
-// 	}
-// ];
-
-// const DRILL_METRICS = [
-// 	['gross_sales', 'Gross sales'],
-// 	['discount', 'Discount given'],
-// 	['return', 'Returns'],
-// 	['collection_current,collection_prior,collection_unallocated', 'Money received'],
-// 	['collection_current', 'Collected — this period only'],
-// 	['collection_prior', 'Collected — older debt only'],
-// 	['collection_unallocated', 'Collected — not matched'],
-// 	['payment_discount', 'Discount at payment'],
-// 	['commission', 'Doctor commission'],
-// 	['payroll', 'Staff payroll'],
-// 	['expense', 'Other expense'],
-// 	['commission,payroll,expense', 'Total expense'],
-// 	['refund', 'Refunds'],
-// 	['ar_transfer_in', 'Debt created'],
-// 	['ar_transfer_out', 'Debt cleared']
-// ];
-
-// class ManagementDashboard {
-// 	constructor(page) {
-// 		this.page = page;
-// 		this.state = {
-// 			mode: 'compare', granularity: 'Monthly', company: null,
-// 			period_label: null,
-// 			drill_metric: 'gross_sales', drill_dimension: 'Item Group'
-// 		};
-// 	}
-
-// 	async init() {
-// 		this.filters = await this.call('get_filters', {});
-// 		this.definitions = await this.call('get_definitions', {});
-// 		this.state.company = this.filters.default_company ||
-// 			(this.filters.companies || [])[0] || null;
-// 		this.build_layout();
-// 		this.build_filter_bar();
-// 		this.rebuild_period_options();
-// 		this.refresh();
-// 	}
-
-// 	call(method, args) {
-// 		return frappe.call({
-// 			method: 'rasiin_insights.management_dashboard.utils.api.' + method,
-// 			args: args
-// 		}).then(r => r.message);
-// 	}
-
-// 	// ------------------------------------------------------- period buckets
-
-// 	buckets() {
-// 		/* Group the available months into the chosen granularity. This is the
-// 		   same rule the server uses, so a label here always maps back to the
-// 		   same months there. */
-// 		const months = this.filters.periods || [];
-// 		const g = this.state.granularity;
-// 		const out = [];
-// 		months.forEach(m => {
-// 			const [y, mm] = m.split('-');
-// 			const n = parseInt(mm, 10);
-// 			let label = m;
-// 			if (g === 'Quarterly') label = `${y}-Q${Math.floor((n - 1) / 3) + 1}`;
-// 			else if (g === 'Half-yearly') label = `${y}-H${n <= 6 ? 1 : 2}`;
-// 			else if (g === 'Yearly') label = y;
-// 			let b = out.find(x => x.label === label);
-// 			if (!b) { b = { label: label, months: [] }; out.push(b); }
-// 			b.months.push(m);
-// 		});
-// 		return out.map(b => ({
-// 			label: b.label, from: b.months[0], to: b.months[b.months.length - 1]
-// 		}));
-// 	}
-
-// 	build_filter_bar() {
-// 		this.f_gran = this.page.add_field({
-// 			fieldname: 'granularity', label: 'View by', fieldtype: 'Select',
-// 			options: this.filters.granularities, default: 'Monthly',
-// 			change: () => {
-// 				this.state.granularity = this.f_gran.get_value();
-// 				this.rebuild_period_options();
-// 				this.refresh();
-// 			}
-// 		});
-
-// 		// Focus mode only.
-// 		this.f_period = this.page.add_field({
-// 			fieldname: 'period', label: 'Period', fieldtype: 'Select', options: [],
-// 			change: () => { this.state.period_label = this.f_period.get_value(); this.refresh(); }
-// 		});
-
-// 		// Compare mode only. Two buckets, so you can look at the FIRST four
-// 		// months as easily as the last four.
-// 		this.f_bfrom = this.page.add_field({
-// 			fieldname: 'bucket_from', label: 'From', fieldtype: 'Select', options: [],
-// 			change: () => { this.state.bucket_from = this.f_bfrom.get_value(); this.refresh(); }
-// 		});
-// 		this.f_bto = this.page.add_field({
-// 			fieldname: 'bucket_to', label: 'To', fieldtype: 'Select', options: [],
-// 			change: () => { this.state.bucket_to = this.f_bto.get_value(); this.refresh(); }
-// 		});
-
-// 		this.f_company = this.page.add_field({
-// 			fieldname: 'company', label: 'Company', fieldtype: 'Select',
-// 			options: ['All companies'].concat(this.filters.companies || []),
-// 			default: this.state.company,
-// 			change: () => {
-// 				const v = this.f_company.get_value();
-// 				this.state.company = (v === 'All companies') ? null : v;
-// 				this.refresh();
-// 			}
-// 		});
-
-// 		this.page.set_secondary_action('Refresh', () => this.refresh());
-// 		this.sync_filter_visibility();
-// 	}
-
-// 	rebuild_period_options() {
-// 		const labels = this.buckets().map(b => b.label);
-// 		[this.f_period, this.f_bfrom, this.f_bto].forEach(f => {
-// 			f.df.options = labels; f.refresh();
-// 		});
-// 		if (!labels.includes(this.state.period_label)) {
-// 			this.state.period_label = labels[labels.length - 1];
-// 			this.f_period.set_value(this.state.period_label);
-// 		}
-// 		// Default compare window: the last eight buckets, or all of them.
-// 		this.state.bucket_from = labels[Math.max(0, labels.length - 8)];
-// 		this.state.bucket_to = labels[labels.length - 1];
-// 		this.f_bfrom.set_value(this.state.bucket_from);
-// 		this.f_bto.set_value(this.state.bucket_to);
-// 	}
-
-// 	sync_filter_visibility() {
-// 		const focus = this.state.mode === 'focus';
-// 		// .toggle() is unreliable on Frappe page fields; set display directly.
-// 		this.f_period.$wrapper.css('display', focus ? '' : 'none');
-// 		this.f_bfrom.$wrapper.css('display', focus ? 'none' : '');
-// 		this.f_bto.$wrapper.css('display', focus ? 'none' : '');
-// 	}
-
-// 	range() {
-// 		const buckets = this.buckets();
-// 		if (!buckets.length) return null;
-// 		if (this.state.mode === 'focus') {
-// 			const b = buckets.find(x => x.label === this.state.period_label) ||
-// 				buckets[buckets.length - 1];
-// 			return { from: b.from, to: b.to };
-// 		}
-// 		let i = buckets.findIndex(x => x.label === this.state.bucket_from);
-// 		let j = buckets.findIndex(x => x.label === this.state.bucket_to);
-// 		if (i < 0) i = 0;
-// 		if (j < 0) j = buckets.length - 1;
-// 		if (i > j) [i, j] = [j, i];
-// 		return { from: buckets[i].from, to: buckets[j].to };
-// 	}
-
-// 	// --------------------------------------------------------------- layout
-
-// 	build_layout() {
-// 		this.$c = $(`
-// 			<div class="rd">
-// 				<div class="rd-topbar">
-// 					<div class="rd-modes">
-// 						<button class="rd-mode active" data-mode="compare">Compare periods</button>
-// 						<button class="rd-mode" data-mode="focus">Focus on one</button>
-// 					</div>
-// 					<div class="rd-range-note"></div>
-// 				</div>
-// 				<div class="rd-health"></div>
-// 				<div class="rd-main"></div>
-// 				<div class="rd-h">How the money moved</div>
-// 				<div class="rd-trend"></div>
-// 				<div class="rd-h">Where it came from</div>
-// 				<div class="rd-drill-controls"></div>
-// 				<div class="rd-drill-row">
-// 					<div class="rd-drill-chart"></div>
-// 					<div class="rd-drill-table"></div>
-// 				</div>
-// 				<div class="rd-h">Is it changing?</div>
-// 				<div class="rd-drill-trend"></div>
-// 			</div>
-// 			<style>
-// 			.rd { padding-bottom: 50px; --ink:#111827; --dim:#6b7280;
-// 				--line:#e8eaed; --navy:#1f3864; --good:#1b5e20; --bad:#b3261e; }
-// 			.rd-topbar { display:flex; align-items:center; justify-content:space-between;
-// 				gap:12px; margin: 4px 0 14px; flex-wrap:wrap; }
-// 			.rd-modes { display:inline-flex; border:1px solid var(--line);
-// 				border-radius:8px; overflow:hidden; }
-// 			.rd-mode { border:0; background:transparent; padding:7px 16px; font-size:13px;
-// 				cursor:pointer; color:var(--dim); }
-// 			.rd-mode.active { background:var(--navy); color:#fff; font-weight:600; }
-// 			.rd-range-note { font-size:12px; color:var(--dim); }
-// 			.rd-health { padding:10px 14px; border-radius:6px; font-size:13px;
-// 				margin-bottom:18px; }
-// 			.rd-health.good { background:#e8f5e9; color:#1b5e20; }
-// 			.rd-health.warn { background:#fff8e1; color:#7a5900; }
-// 			.rd-h { font-size:12px; font-weight:600; letter-spacing:.06em;
-// 				text-transform:uppercase; color:var(--dim); margin:32px 0 12px; }
-
-// 			/* ---- compare table ---- */
-// 			.rd-tbl { width:100%; border-collapse:collapse; font-size:13px; }
-// 			.rd-tbl th, .rd-tbl td { padding:7px 10px; }
-// 			.rd-tbl thead th { position:sticky; top:0; background:#fff; z-index:1;
-// 				font-size:11px; text-transform:uppercase; letter-spacing:.04em;
-// 				color:var(--dim); border-bottom:2px solid var(--line); text-align:right; }
-// 			.rd-tbl thead th:first-child { text-align:left; }
-// 			.rd-tbl td { text-align:right; font-variant-numeric:tabular-nums;
-// 				border-bottom:1px solid #f3f4f6; }
-// 			.rd-tbl td:first-child { text-align:left; color:var(--ink); cursor:pointer; }
-// 			.rd-tbl td:first-child:hover { color:var(--navy); text-decoration:underline; }
-// 			.rd-grp td { background:#f7f8fa; font-weight:600; font-size:11px;
-// 				text-transform:uppercase; letter-spacing:.05em; color:var(--dim);
-// 				cursor:default !important; }
-// 			.rd-strong td { font-weight:700; border-top:1px solid var(--line);
-// 				border-bottom:1px solid var(--line); }
-// 			.rd-muted td { color:var(--dim); font-style:italic; }
-// 			.rd-warn td:first-child::after { content:' !'; color:#a16207; font-weight:700; }
-// 			.rd-neg { color:var(--bad); }
-
-// 			/* ---- focus cards ---- */
-// 			.rd-grpblock { margin-bottom:22px; }
-// 			.rd-grptitle { font-size:11px; font-weight:700; letter-spacing:.06em;
-// 				text-transform:uppercase; color:var(--dim); margin-bottom:8px; }
-// 			.rd-cards { display:grid; gap:10px;
-// 				grid-template-columns:repeat(auto-fit,minmax(180px,1fr)); }
-// 			.rd-card { border:1px solid var(--line); border-radius:8px; padding:12px 14px;
-// 				cursor:pointer; background:#fff; }
-// 			.rd-card:hover { border-color:var(--navy); }
-// 			.rd-card.strong { border-left:3px solid var(--navy); }
-// 			.rd-lab { font-size:11px; color:var(--dim); text-transform:uppercase;
-// 				letter-spacing:.04em; }
-// 			.rd-val { font-size:21px; font-weight:600; margin-top:3px; }
-// 			.rd-sub { font-size:11px; color:var(--dim); margin-top:2px; }
-// 			.rd-up { color:var(--good); } .rd-down { color:var(--bad); }
-
-// 			.rd-card { border-left:3px solid transparent; }
-// 			.rd-card.rev  { border-left-color:#1f3864; background:#f7f9fd; }
-// 			.rd-card.cash { border-left-color:#2e7d32; background:#f5faf6; }
-// 			.rd-card.out  { border-left-color:#b3261e; background:#fdf7f7; }
-// 			.rd-card.owe  { border-left-color:#a16207; background:#fdfaf3; }
-// 			.rd-card.ratio{ border-left-color:#6b7280; background:#fafafa; }
-// 			.rd-card.strong { box-shadow:0 1px 3px rgba(0,0,0,.10); }
-// 			.rd-card.strong .rd-val { font-size:24px; }
-// 			.rd-grp.rev td { color:#1f3864; background:#eef2f9; }
-// 			.rd-grp.cash td { color:#1b5e20; background:#eef6ef; }
-// 			.rd-grp.out td { color:#b3261e; background:#fbeeee; }
-// 			.rd-grp.owe td { color:#8a5a00; background:#fbf5e9; }
-
-// 			.rd-drill-row { display:grid; gap:18px; grid-template-columns:1.25fr 1fr; }
-// 			@media (max-width:900px){ .rd-drill-row{grid-template-columns:1fr;} }
-// 			.rd-drill-controls { display:flex; gap:10px; flex-wrap:wrap; margin-bottom:10px; }
-// 			.rd-drill-controls select { padding:6px 10px; border-radius:6px;
-// 				border:1px solid var(--line); font-size:13px; }
-// 			.rd-bar { height:3px; background:var(--navy); border-radius:2px; margin-top:3px; }
-// 			</style>
-// 		`).appendTo(this.page.body);
-
-// 		$(this.page.wrapper).find('.page-form').removeClass('hide').show();
-
-// 		this.$c.find('.rd-mode').on('click', (e) => {
-// 			this.state.mode = e.currentTarget.dataset.mode;
-// 			this.$c.find('.rd-mode').removeClass('active');
-// 			$(e.currentTarget).addClass('active');
-// 			this.sync_filter_visibility();
-// 			this.refresh();
-// 		});
-// 	}
-
-// 	blank_label(dimension) {
-// 		/* "Not recorded" implies someone forgot. Usually the truth is that the
-// 		   transaction has no such attribute at all — a journal entry has no
-// 		   cashier and no item line, and never will. */
-// 		return {
-// 			'Cashier': 'No cashier (journal or system entry)',
-// 			'Item Group': 'No item line (journal entry)',
-// 			'Merchant Account': 'No merchant account',
-// 			'Mode of Payment': 'No payment mode',
-// 			'Practitioner': 'No practitioner',
-// 			'Sales Type': 'Sales type not selected',
-// 			'Payer Type': 'Payer not classified',
-// 			'Service Line': 'Service line unresolved',
-// 			'Quality Flag': 'Clean'
-// 		}[dimension] || 'Not applicable';
-// 	}
-
-// 	// --------------------------------------------------------------- render
-
-// 	async refresh() {
-// 		const r = this.range();
-// 		if (!r) return;
-// 		frappe.dom.freeze();
-// 		try {
-// 			const [summary, health] = await Promise.all([
-// 				this.call('get_summary', {
-// 					from_period: r.from, to_period: r.to,
-// 					granularity: this.state.granularity, company: this.state.company
-// 				}),
-// 				this.call('get_health', {
-// 					from_period: r.from, to_period: r.to, company: this.state.company
-// 				})
-// 			]);
-// 			this.summary = summary;
-// 			this.$c.find('.rd-range-note').text(
-// 				`${r.from} to ${r.to} · ${this.state.company || 'All companies'}`);
-// 			this.render_health(health);
-// 			if (this.state.mode === 'compare') this.render_compare(summary);
-// 			else this.render_focus(summary);
-// 			this.render_trend(summary);
-// 			this.render_drill_controls();
-// 			await this.refresh_drill();
-// 		} finally {
-// 			frappe.dom.unfreeze();
-// 		}
-// 	}
-
-// 	render_health(h) {
-// 		const good = h.worst >= 95;
-// 		this.$c.find('.rd-health').removeClass('good warn')
-// 			.addClass(good ? 'good' : 'warn')
-// 			.html(`<b>${good ? 'Data quality: good' : 'Data quality: read this'}</b> — ${h.message}
-// 				Lowest traced share here: <b>${h.worst}%</b>.`);
-// 	}
-
-// 	value_of(p, line) {
-// 		if (line.key === 'quality_score') return flt(p.quality_score) / 100;
-// 		return flt(p[line.key]);
-// 	}
-
-// 	render_compare(summary) {
-// 		const periods = summary.periods || [];
-// 		if (!periods.length) { this.$c.find('.rd-main').html('<p>No data.</p>'); return; }
-
-// 		let html = `<div style="overflow:auto"><table class="rd-tbl">
-// 			<thead><tr><th>Figure</th>
-// 			${periods.map(p => `<th>${p.period}</th>`).join('')}
-// 			<th>Range</th></tr></thead><tbody>`;
-
-// 		GROUPS.forEach(g => {
-// 			html += `<tr class="rd-grp ${g.tone}"><td colspan="${periods.length + 2}">${g.title}</td></tr>`;
-// 			g.lines.forEach(line => {
-// 				const cls = [line.strong ? 'rd-strong' : '', line.muted ? 'rd-muted' : '',
-// 					line.warn ? 'rd-warn' : ''].filter(Boolean).join(' ');
-// 				const cells = periods.map(p => {
-// 					const v = this.value_of(p, line);
-// 					const shown = (g.pct || line.raw_pct) ? this.pct(v)
-// 						: this.money(line.sign === -1 ? -v : v);
-// 					return `<td class="${line.sign === -1 ? 'rd-neg' : ''}">${shown}</td>`;
-// 				}).join('');
-// 				let total = '';
-// 				if (g.pct || line.raw_pct) {
-// 					total = periods.length
-// 						? this.pct(this.value_of(periods[periods.length - 1], line)) : '';
-// 				} else if (line.key.endsWith('_closing')) {
-// 					total = this.money(flt(summary.total[line.key]));
-// 				} else {
-// 					total = this.money(line.sign === -1
-// 						? -flt(summary.total[line.key]) : flt(summary.total[line.key]));
-// 				}
-// 				html += `<tr class="${cls}"><td data-metric="${line.metric || ''}"
-// 					data-key="${line.key}" data-label="${line.label}">${line.label}</td>
-// 					${cells}<td><b>${total}</b></td></tr>`;
-// 			});
-// 		});
-
-// 		html += '</tbody></table></div>';
-// 		this.$c.find('.rd-main').html(html);
-// 		this.$c.find('.rd-tbl td[data-key]').on('click', (e) => {
-// 			const d = e.currentTarget.dataset;
-// 			this.explain(d.metric, d.label, d.key);
-// 		});
-// 	}
-
-// 	render_focus(summary) {
-// 		const periods = summary.periods || [];
-// 		if (!periods.length) { this.$c.find('.rd-main').html('<p>No data.</p>'); return; }
-// 		const cur = periods[periods.length - 1];
-// 		const prev = periods.length > 1 ? periods[periods.length - 2] : null;
-
-// 		const html = GROUPS.map(g => `
-// 			<div class="rd-grpblock">
-// 				<div class="rd-grptitle">${g.title}</div>
-// 				<div class="rd-cards">${g.lines.map(line => {
-// 					const v = this.value_of(cur, line);
-// 					const shown = (g.pct || line.raw_pct) ? this.pct(v) : this.money(v);
-// 					let delta = '';
-// 					if (prev) {
-// 						const pv = this.value_of(prev, line);
-// 						if (pv) {
-// 							const ch = (v - pv) / Math.abs(pv);
-// 							const up = ch >= 0;
-// 							const good = line.warn || line.sign === -1 ? !up : up;
-// 							delta = `<div class="rd-sub ${good ? 'rd-up' : 'rd-down'}">
-// 								${up ? '▲' : '▼'} ${this.pct(Math.abs(ch))} vs previous</div>`;
-// 						}
-// 					}
-// 					return `<div class="rd-card ${g.tone} ${line.strong ? 'strong' : ''}"
-// 						data-metric="${line.metric || ''}" data-key="${line.key}"
-// 						data-label="${line.label}">
-// 						<div class="rd-lab">${line.label}</div>
-// 						<div class="rd-val">${shown}</div>${delta}
-// 						${line.note ? `<div class="rd-sub">${line.note}</div>` : ''}
-// 					</div>`;
-// 				}).join('')}</div>
-// 			</div>`).join('');
-
-// 		this.$c.find('.rd-main').html(html);
-// 		this.$c.find('.rd-card').on('click', (e) => {
-// 			const d = e.currentTarget.dataset;
-// 			this.explain(d.metric, d.label, d.key);
-// 		});
-// 	}
-
-// 	explain(metric, label, key) {
-// 		const m = metric && this.definitions.metrics[metric];
-// 		const derived = this.definitions.derived || {};
-// 		let body = '';
-// 		if (m) {
-// 			body = `<p><b>What it means</b><br>${m.means}</p>
-// 				<p><b>Where it comes from</b><br>${m.source}</p>
-// 				<p><b>How it is calculated</b><br><code>${m.formula}</code></p>
-// 				<p><b>Worth knowing</b><br>${m.caveat}</p>`;
-// 		}
-// 		if (derived[key]) {
-// 			body += `<p><b>Formula</b><br><code>${key} = ${derived[key]}</code></p>`;
-// 		}
-// 		if (!body) body = '<p>Derived from the figures above it.</p>';
-// 		frappe.msgprint({ title: label, message: body, wide: true });
-// 	}
-
-// 	render_trend(summary) {
-// 		const p = summary.periods || [];
-// 		new frappe.Chart(this.$c.find('.rd-trend')[0], {
-// 			data: {
-// 				labels: p.map(x => x.period),
-// 				datasets: [
-// 					{ name: 'Net sales', values: p.map(x => x.net_sales) },
-// 					{ name: 'Money received', values: p.map(x => x.total_collections) },
-// 					{ name: 'Money out', values: p.map(x => x.money_out) }
-// 				]
-// 			},
-// 			type: 'line', height: 260, colors: ['#1f3864', '#2e7d32', '#b3261e'],
-// 			lineOptions: { hideDots: 0, regionFill: 0 },
-// 			axisOptions: { xIsSeries: 1 },
-// 			tooltipOptions: { formatTooltipY: d => this.money(d) }
-// 		});
-// 	}
-
-// 	render_drill_controls() {
-// 		const dims = this.filters.dimensions || [];
-// 		this.$c.find('.rd-drill-controls').html(`
-// 			<select class="rd-metric">${DRILL_METRICS.map(([v, l]) =>
-// 				`<option value="${v}" ${v === this.state.drill_metric ? 'selected' : ''}>${l}</option>`
-// 			).join('')}</select>
-// 			<select class="rd-dimension">${dims.map(d =>
-// 				`<option value="${d}" ${d === this.state.drill_dimension ? 'selected' : ''}>by ${d}</option>`
-// 			).join('')}</select>`);
-// 		this.$c.find('.rd-metric').on('change', e => {
-// 			this.state.drill_metric = e.target.value; this.refresh_drill();
-// 		});
-// 		this.$c.find('.rd-dimension').on('change', e => {
-// 			this.state.drill_dimension = e.target.value; this.refresh_drill();
-// 		});
-// 	}
-
-// 	async refresh_drill() {
-// 		const r = this.range();
-// 		const s = this.state;
-// 		const args = {
-// 			metric: s.drill_metric, dimension_type: s.drill_dimension,
-// 			from_period: r.from, to_period: r.to, company: s.company
-// 		};
-// 		const [dim, trend] = await Promise.all([
-// 			this.call('get_dimension', args),
-// 			this.call('get_dimension_trend',
-// 				Object.assign({}, args, { granularity: s.granularity, top: 6 }))
-// 		]);
-
-// 		const top = dim.rows.slice(0, 12);
-// 		new frappe.Chart(this.$c.find('.rd-drill-chart')[0], {
-// 			data: { labels: top.map(x => (x.label === 'Not recorded' ? this.blank_label(s.drill_dimension) : x.label)),
-// 				datasets: [{ name: 'Amount', values: top.map(x => x.amount) }] },
-// 			type: 'bar', height: 330, colors: ['#1f3864'],
-// 			tooltipOptions: { formatTooltipY: d => this.money(d) }
-// 		});
-
-// 		this.$c.find('.rd-h').eq(1).text(
-// 			`Where it came from — ${r.from} to ${r.to} combined`);
-
-// 		this.$c.find('.rd-drill-table').html(`
-// 			<div style="max-height:330px;overflow:auto"><table class="rd-tbl">
-// 				<thead><tr><th>${s.drill_dimension}</th><th>Amount</th><th>Share</th></tr></thead>
-// 				<tbody>${dim.rows.map(x => `<tr>
-// 					<td style="cursor:default">${frappe.utils.escape_html((x.label === 'Not recorded' ? this.blank_label(s.drill_dimension) : x.label) || '')}</td>
-// 					<td>${this.money(x.amount)}</td>
-// 					<td>${this.pct(x.share)}<div class="rd-bar"
-// 						style="width:${Math.round(x.share * 100)}%"></div></td></tr>`).join('')}
-// 				</tbody>
-// 				<tfoot><tr class="rd-strong"><td style="cursor:default">Total</td>
-// 					<td>${this.money(dim.total)}</td><td></td></tr></tfoot>
-// 			</table></div>`);
-
-// 		new frappe.Chart(this.$c.find('.rd-drill-trend')[0], {
-// 			data: { labels: trend.periods, datasets: trend.series },
-// 			type: 'bar', height: 300, barOptions: { stacked: 1 },
-// 			tooltipOptions: { formatTooltipY: d => this.money(d) }
-// 		});
-// 	}
-
-// 	money(v) {
-// 		return format_currency(flt(v), frappe.defaults.get_default('currency'), 0);
-// 	}
-
-// 	pct(v) { return (flt(v) * 100).toFixed(1) + '%'; }
-// }

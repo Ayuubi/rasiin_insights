@@ -23,13 +23,24 @@ SELF-EXPLANATION
 """
 
 import frappe
-from frappe.utils import flt, getdate, add_months
+from frappe.utils import flt, getdate, add_months, add_days
 
 from rasiin_insights.management_dashboard.utils import controls
 
 # Balances are point-in-time. Everything else accumulates over the period.
 BALANCE_METRICS = {"ar_opening", "ar_closing", "ap_opening", "ap_closing"}
 OPENING_METRICS = {"ar_opening", "ap_opening"}
+
+# Flow metrics only. Balances have no daily equivalent without walking the
+# ledger day by day, which is a different, heavier build than this — refuse
+# them here rather than return a number that looks like a daily balance and
+# isn't one.
+DAILY_METRICS = {
+    "gross_sales", "discount", "return", "return_discount", "revenue_reclass",
+    "collection_current", "collection_prior", "collection_unallocated",
+    "payment_discount", "commission", "payroll", "expense", "refund",
+    "ar_transfer_in", "ar_transfer_out", "payable_charged", "supplier_payment",
+}
 
 GRANULARITIES = {
     "Monthly": 1,
@@ -131,6 +142,8 @@ def _derive(m):
         "gross_sales": g("gross_sales"),
         "discount": g("discount"),
         "return": g("return"),
+        "return_discount": g("return_discount"),
+        "revenue_reclass": g("revenue_reclass"),
         "net_sales": net_sales,
         "collection_current": g("collection_current"),
         "collection_prior": g("collection_prior"),
@@ -306,6 +319,116 @@ def get_dimension_trend(metric, dimension_type, from_period, to_period,
 
     return {"periods": labels, "series": out, "metric": metric,
             "dimension_type": dimension_type}
+
+
+@frappe.whitelist()
+def get_daily_trend(from_date, to_date, metric, company=None):
+    """
+    Day-level trend for one or more flow metrics, read live from Management
+    Fact — the snapshot has no day grain by design (see snapshot.py), so
+    this bypasses it on purpose, the same way cross-dimension one-off
+    questions already fall through to the fact table live.
+
+    Every calendar day in range is returned, zero-filled, so a line chart
+    never silently skips a day with no activity.
+    """
+    metrics = [m.strip() for m in str(metric).split(",") if m.strip()]
+    bad = [m for m in metrics if m not in DAILY_METRICS]
+    if bad:
+        frappe.throw("Not a daily metric: {0}".format(", ".join(bad)))
+
+    conditions = ["posting_date BETWEEN %(from)s AND %(to)s", "metric IN %(m)s"]
+    values = {"from": from_date, "to": to_date, "m": metrics}
+    if company:
+        conditions.append("company = %(c)s")
+        values["c"] = company
+
+    rows = frappe.db.sql("""
+        SELECT posting_date, SUM(amount) AS amount
+        FROM `tabManagement Fact`
+        WHERE {0}
+        GROUP BY posting_date
+    """.format(" AND ".join(conditions)), values, as_dict=True)
+
+    by_date = {str(r.posting_date): flt(r.amount) for r in rows}
+    cursor, end = getdate(from_date), getdate(to_date)
+    dates, values_out = [], []
+    while cursor <= end:
+        key = str(cursor)
+        dates.append(key)
+        values_out.append(by_date.get(key, 0.0))
+        cursor = add_days(cursor, 1)
+
+    return {"dates": dates, "values": values_out, "metric": metric,
+            "total": sum(values_out)}
+
+
+@frappe.whitelist()
+def get_daily_summary(from_date, to_date, company=None):
+    """
+    The same story as get_summary — gross sales, less discount, less
+    returns, net sales, money in, money out, ratios — one row per day
+    instead of one row per month bucket. Read live from Management Fact,
+    same reasoning as get_daily_trend.
+
+    Receivables/payables are left out on purpose: ar_closing/ap_closing are
+    point-in-time balances built from the monthly snapshot's carry-forward
+    opening. There is no daily equivalent without walking the ledger day by
+    day, so those keys come back 0 here and the caller should not render
+    that group for the daily table.
+    """
+    conditions = ["posting_date BETWEEN %(from)s AND %(to)s", "metric IN %(m)s"]
+    values = {"from": from_date, "to": to_date, "m": list(DAILY_METRICS)}
+    if company:
+        conditions.append("company = %(c)s")
+        values["c"] = company
+    where = " AND ".join(conditions)
+
+    rows = frappe.db.sql("""
+        SELECT posting_date, metric, SUM(amount) AS amount
+        FROM `tabManagement Fact`
+        WHERE {0}
+        GROUP BY posting_date, metric
+    """.format(where), values, as_dict=True)
+
+    by_day = {}
+    for r in rows:
+        by_day.setdefault(str(r.posting_date), {})[r.metric] = flt(r.amount)
+
+    quality_rows = frappe.db.sql("""
+        SELECT posting_date,
+               COALESCE(SUM(CASE WHEN item_group = 'Unallocated' THEN amount END), 0) AS untraced,
+               COALESCE(SUM(amount), 0) AS total
+        FROM `tabManagement Fact`
+        WHERE {0}
+          AND metric IN ('collection_current', 'collection_prior', 'collection_unallocated')
+        GROUP BY posting_date
+    """.format(where), values, as_dict=True)
+    quality_by_day = {str(r.posting_date):
+        (round(100.0 * (1 - flt(r.untraced) / flt(r.total)), 2) if flt(r.total) else 0.0)
+        for r in quality_rows}
+
+    cursor, end = getdate(from_date), getdate(to_date)
+    days = []
+    all_metrics = {}
+    while cursor <= end:
+        key = str(cursor)
+        day_metrics = by_day.get(key, {})
+        for m, a in day_metrics.items():
+            all_metrics[m] = all_metrics.get(m, 0.0) + a
+        figures = _derive(day_metrics)
+        figures["date"] = key
+        figures["quality_score"] = quality_by_day.get(key, 0.0)
+        days.append(figures)
+        cursor = add_days(cursor, 1)
+
+    total = _derive(all_metrics)
+    total_untraced = sum(flt(r.untraced) for r in quality_rows)
+    total_all = sum(flt(r.total) for r in quality_rows)
+    total["quality_score"] = (round(100.0 * (1 - total_untraced / total_all), 2)
+                               if total_all else 0.0)
+
+    return {"days": days, "total": total}
 
 
 @frappe.whitelist()
