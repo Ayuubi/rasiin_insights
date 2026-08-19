@@ -1,0 +1,145 @@
+{
+ "actions": [],
+ "allow_rename": 1,
+ "creation": "2026-08-18 13:40:28.376388",
+ "default_view": "List",
+ "doctype": "DocType",
+ "editable_grid": 1,
+ "engine": "InnoDB",
+ "field_order": [
+  "management_dashboard_section",
+  "md_default_company",
+  "md_enabled",
+  "md_rebuild_months",
+  "md_run_hour",
+  "md_drift_threshold",
+  "md_exclude_internal_transfers",
+  "md_transfer_detection",
+  "md_include_drafts",
+  "md_alert_recipients",
+  "md_payment_discount_accounts",
+  "md_commission_accounts",
+  "md_payroll_accounts"
+ ],
+ "fields": [
+  {
+   "fieldname": "management_dashboard_section",
+   "fieldtype": "Section Break",
+   "label": "Management Dashboard"
+  },
+  {
+   "description": "Which company reports open with.",
+   "fieldname": "md_default_company",
+   "fieldtype": "Link",
+   "label": "MD Default Company",
+   "options": "Company"
+  },
+  {
+   "default": "0",
+   "description": "\tMaster switch for the nightly job. Off = nothing runs automatically; you can still build manually.",
+   "fieldname": "md_enabled",
+   "fieldtype": "Check",
+   "label": "MD Enabled"
+  },
+  {
+   "default": "2",
+   "description": "\tHow many recent months to rebuild each night. 2 = current + previous. 3 given how late your sweep journals land.",
+   "fieldname": "md_rebuild_months",
+   "fieldtype": "Int",
+   "label": "MD Rebuild Months"
+  },
+  {
+   "default": "2",
+   "description": "Hour of day, 24-hour clock. 2 means 02:00, i.e. 2 AM. The job is registered hourly and exits immediately unless the current hour matches \u2014 so changing the time is a settings edit, not a deploy.",
+   "fieldname": "md_run_hour",
+   "fieldtype": "Int",
+   "label": "MD Run Hour"
+  },
+  {
+   "default": "1",
+   "description": "\tCurrency. A control variance above this counts as drift. 1.00 ignores rounding, catches real problems.",
+   "fieldname": "md_drift_threshold",
+   "fieldtype": "Currency",
+   "label": "MD Drift Threshold"
+  },
+  {
+   "default": "1",
+   "description": "Leave on. It exists so you can turn it off in front of the CEO and show the $3.87M figure the old reports gave.",
+   "fieldname": "md_exclude_internal_transfers",
+   "fieldtype": "Check",
+   "label": "MD Exclude Internal Transfers"
+  },
+  {
+   "default": "GL contra account",
+   "description": "How internal transfers are identified. GL contra account is the working option. The Daily Cash Transfer link option exists for the day that field gets filled \u2014 it's 0% today.",
+   "fieldname": "md_transfer_detection",
+   "fieldtype": "Select",
+   "label": "MD Transfe Detection",
+   "options": "\nGL contra account\nDaily Cash Transfer link\nBoth"
+  },
+  {
+   "default": "0",
+   "description": "Whether draft invoices count as sales. 0 \u2014 the CEO's answer to question 2.",
+   "fieldname": "md_include_drafts",
+   "fieldtype": "Check",
+   "label": "MD Include Drafts"
+  },
+  {
+   "description": "Who gets emailed when a period drifts.",
+   "fieldname": "md_alert_recipients",
+   "fieldtype": "Data",
+   "label": "MD Alert Recipients"
+  },
+  {
+   "description": "Accounts whose debits are payment-time write-offs. \u2192 Discount - SH",
+   "fieldname": "md_payment_discount_accounts",
+   "fieldtype": "Small Text",
+   "label": "MD Payment Discount Accounts"
+  },
+  {
+   "description": "\tAccounts carved out as doctor commission. \u2192 50010 - Doctors' Salaries & Commissions - SH",
+   "fieldname": "md_commission_accounts",
+   "fieldtype": "Small Text",
+   "label": "MD Commission Accounts"
+  },
+  {
+   "description": "Accounts carved out as staff salary. \u2192 5213 - Salary - SH",
+   "fieldname": "md_payroll_accounts",
+   "fieldtype": "Small Text",
+   "label": "MD Payroll Accounts"
+  }
+ ],
+ "index_web_pages_for_search": 1,
+ "issingle": 1,
+ "links": [],
+ "modified": "2026-08-19 00:18:42.044123",
+ "modified_by": "Administrator",
+ "module": "Management Dashboard",
+ "name": "Rasiin Insights Settings",
+ "owner": "Administrator",
+ "permissions": [
+  {
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "print": 1,
+   "read": 1,
+   "role": "System Manager",
+   "share": 1,
+   "write": 1
+  },
+  {
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "print": 1,
+   "read": 1,
+   "role": "Accounts Manager",
+   "share": 1,
+   "write": 1
+  }
+ ],
+ "sort_field": "modified",
+ "sort_order": "DESC",
+ "states": []
+}

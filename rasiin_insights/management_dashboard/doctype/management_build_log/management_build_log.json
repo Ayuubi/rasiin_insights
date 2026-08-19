@@ -1,0 +1,91 @@
+{
+ "actions": [],
+ "allow_rename": 1,
+ "autoname": "hash",
+ "creation": "2026-08-18 15:11:40.915344",
+ "default_view": "List",
+ "doctype": "DocType",
+ "editable_grid": 1,
+ "engine": "InnoDB",
+ "field_order": [
+  "run_started",
+  "run_finished",
+  "periods_rebuilt",
+  "fact_rows_written",
+  "duration_seconds",
+  "status",
+  "drift_detail",
+  "error_log"
+ ],
+ "fields": [
+  {
+   "fieldname": "run_started",
+   "fieldtype": "Datetime",
+   "label": "Run Started"
+  },
+  {
+   "fieldname": "run_finished",
+   "fieldtype": "Datetime",
+   "label": "Run Finished"
+  },
+  {
+   "description": "e.g. 2026-07, 2026-08",
+   "fieldname": "periods_rebuilt",
+   "fieldtype": "Data",
+   "label": "Periods Rebuilt"
+  },
+  {
+   "fieldname": "fact_rows_written",
+   "fieldtype": "Int",
+   "label": "Fact Rows Written"
+  },
+  {
+   "fieldname": "duration_seconds",
+   "fieldtype": "Int",
+   "label": "Duration Seconds"
+  },
+  {
+   "fieldname": "status",
+   "fieldtype": "Select",
+   "label": "Status",
+   "options": "\nSuccess\nSuccess with drift\nFailed"
+  },
+  {
+   "description": "which period, which metric, how much",
+   "fieldname": "drift_detail",
+   "fieldtype": "Long Text",
+   "label": "Drift Detail"
+  },
+  {
+   "fieldname": "error_log",
+   "fieldtype": "Long Text",
+   "label": "Error Log"
+  }
+ ],
+ "index_web_pages_for_search": 1,
+ "links": [],
+ "modified": "2026-08-18 15:32:36.075122",
+ "modified_by": "Administrator",
+ "module": "Management Dashboard",
+ "name": "Management Build Log",
+ "name_case": "Title Case",
+ "naming_rule": "Random",
+ "owner": "Administrator",
+ "permissions": [
+  {
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "System Manager",
+   "share": 1,
+   "write": 1
+  }
+ ],
+ "sort_field": "modified",
+ "sort_order": "DESC",
+ "states": []
+}

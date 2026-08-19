@@ -1,0 +1,115 @@
+{
+ "actions": [],
+ "allow_rename": 1,
+ "autoname": "hash",
+ "creation": "2026-08-18 15:06:27.353156",
+ "default_view": "List",
+ "doctype": "DocType",
+ "editable_grid": 1,
+ "engine": "InnoDB",
+ "field_order": [
+  "company",
+  "period",
+  "metric",
+  "dimension_type",
+  "dimension_value",
+  "amount",
+  "control_total",
+  "variance",
+  "quality_score",
+  "is_frozen"
+ ],
+ "fields": [
+  {
+   "fieldname": "company",
+   "fieldtype": "Link",
+   "in_list_view": 1,
+   "in_standard_filter": 1,
+   "label": "Company",
+   "options": "Company"
+  },
+  {
+   "fieldname": "period",
+   "fieldtype": "Data",
+   "in_list_view": 1,
+   "in_standard_filter": 1,
+   "label": "Period"
+  },
+  {
+   "fieldname": "metric",
+   "fieldtype": "Data",
+   "in_list_view": 1,
+   "in_standard_filter": 1,
+   "label": "Metric"
+  },
+  {
+   "fieldname": "dimension_type",
+   "fieldtype": "Data",
+   "in_list_view": 1,
+   "in_standard_filter": 1,
+   "label": "Dimension Type"
+  },
+  {
+   "fieldname": "dimension_value",
+   "fieldtype": "Data",
+   "label": "Dimension Value"
+  },
+  {
+   "fieldname": "amount",
+   "fieldtype": "Currency",
+   "label": "Amount"
+  },
+  {
+   "description": "\tthe GL figure this row set must tie to",
+   "fieldname": "control_total",
+   "fieldtype": "Currency",
+   "label": "Control Total"
+  },
+  {
+   "description": "\tamount \u2212 control_total",
+   "fieldname": "variance",
+   "fieldtype": "Currency",
+   "label": "Variance"
+  },
+  {
+   "description": "\t% of receipts allocated in this period",
+   "fieldname": "quality_score",
+   "fieldtype": "Percent",
+   "label": "Quality Score"
+  },
+  {
+   "default": "0",
+   "description": "1 = closed month, do not rebuild",
+   "fieldname": "is_frozen",
+   "fieldtype": "Check",
+   "in_list_view": 1,
+   "label": "Is Frozen"
+  }
+ ],
+ "index_web_pages_for_search": 1,
+ "links": [],
+ "modified": "2026-08-18 23:18:13.517616",
+ "modified_by": "Administrator",
+ "module": "Management Dashboard",
+ "name": "Management Snapshot",
+ "name_case": "Title Case",
+ "naming_rule": "Random",
+ "owner": "Administrator",
+ "permissions": [
+  {
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "System Manager",
+   "share": 1,
+   "write": 1
+  }
+ ],
+ "sort_field": "modified",
+ "sort_order": "DESC",
+ "states": []
+}

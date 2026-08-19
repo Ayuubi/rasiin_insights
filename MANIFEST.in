@@ -1,0 +1,18 @@
+include MANIFEST.in
+include requirements.txt
+include *.json
+include *.md
+include *.py
+include *.txt
+recursive-include rasiin_insights *.css
+recursive-include rasiin_insights *.csv
+recursive-include rasiin_insights *.html
+recursive-include rasiin_insights *.ico
+recursive-include rasiin_insights *.js
+recursive-include rasiin_insights *.json
+recursive-include rasiin_insights *.md
+recursive-include rasiin_insights *.png
+recursive-include rasiin_insights *.py
+recursive-include rasiin_insights *.svg
+recursive-include rasiin_insights *.txt
+recursive-exclude rasiin_insights *.pyc

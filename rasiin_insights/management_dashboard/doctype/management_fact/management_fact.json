@@ -1,0 +1,226 @@
+{
+ "actions": [],
+ "allow_rename": 1,
+ "autoname": "hash",
+ "creation": "2026-08-18 14:57:19.833571",
+ "default_view": "List",
+ "doctype": "DocType",
+ "editable_grid": 1,
+ "engine": "InnoDB",
+ "field_order": [
+  "company",
+  "posting_date",
+  "period",
+  "metric",
+  "amount",
+  "voucher_type",
+  "voucher_no",
+  "source_invoice",
+  "item_code",
+  "item_name",
+  "item_group",
+  "channel",
+  "channel_source",
+  "service_line",
+  "service_line_source",
+  "entity",
+  "cost_center",
+  "sales_type",
+  "payer_type",
+  "customer",
+  "customer_name",
+  "practitioner",
+  "mode_of_payment",
+  "merchant_account",
+  "cashier",
+  "party_type",
+  "party",
+  "quality_flag"
+ ],
+ "fields": [
+  {
+   "fieldname": "company",
+   "fieldtype": "Link",
+   "in_list_view": 1,
+   "in_standard_filter": 1,
+   "label": "Company",
+   "options": "Company"
+  },
+  {
+   "fieldname": "posting_date",
+   "fieldtype": "Date",
+   "in_list_view": 1,
+   "in_standard_filter": 1,
+   "label": "Posting Date"
+  },
+  {
+   "description": "YYYY-MM, set in code",
+   "fieldname": "period",
+   "fieldtype": "Data",
+   "in_list_view": 1,
+   "in_standard_filter": 1,
+   "label": "Period"
+  },
+  {
+   "fieldname": "metric",
+   "fieldtype": "Select",
+   "in_list_view": 1,
+   "in_standard_filter": 1,
+   "label": "Metric",
+   "options": "gross_sales\ndiscount\nreturn\nreturn_discount\ncollection_current\ncollection_prior\ncollection_unallocated\nar_transfer_in\nar_transfer_out\nsupplier_payment\npayroll\ncommission\nexpense\nrefund\nrevenue_reclass\npayment_discount\npayable_charged"
+  },
+  {
+   "fieldname": "amount",
+   "fieldtype": "Currency",
+   "in_list_view": 1,
+   "label": "Amount"
+  },
+  {
+   "fieldname": "voucher_no",
+   "fieldtype": "Data",
+   "label": "Voucher No"
+  },
+  {
+   "description": "invoice this traces to",
+   "fieldname": "source_invoice",
+   "fieldtype": "Data",
+   "label": "Source Invoice"
+  },
+  {
+   "fieldname": "item_group",
+   "fieldtype": "Data",
+   "label": "Item Group"
+  },
+  {
+   "fieldname": "channel",
+   "fieldtype": "Data",
+   "label": "Channel"
+  },
+  {
+   "description": "which rule fired",
+   "fieldname": "channel_source",
+   "fieldtype": "Data",
+   "label": "Channel Source"
+  },
+  {
+   "fieldname": "entity",
+   "fieldtype": "Data",
+   "label": "Entity"
+  },
+  {
+   "fieldname": "cost_center",
+   "fieldtype": "Data",
+   "label": "Cost Center"
+  },
+  {
+   "fieldname": "sales_type",
+   "fieldtype": "Data",
+   "label": "Sales Type"
+  },
+  {
+   "fieldname": "payer_type",
+   "fieldtype": "Data",
+   "label": "Payer Type"
+  },
+  {
+   "fieldname": "customer",
+   "fieldtype": "Data",
+   "label": "Customer"
+  },
+  {
+   "fieldname": "customer_name",
+   "fieldtype": "Data",
+   "label": "Customer Name"
+  },
+  {
+   "fieldname": "practitioner",
+   "fieldtype": "Data",
+   "label": "Practitioner"
+  },
+  {
+   "fieldname": "mode_of_payment",
+   "fieldtype": "Data",
+   "label": "Mode of Payment"
+  },
+  {
+   "fieldname": "merchant_account",
+   "fieldtype": "Data",
+   "label": "Merchant Account"
+  },
+  {
+   "fieldname": "cashier",
+   "fieldtype": "Data",
+   "label": "Cashier"
+  },
+  {
+   "description": "\tCustomer / Supplier / Employee",
+   "fieldname": "party_type",
+   "fieldtype": "Data",
+   "label": "Party Type"
+  },
+  {
+   "fieldname": "party",
+   "fieldtype": "Data",
+   "label": "Party"
+  },
+  {
+   "description": "\tunallocated / unclassified / reclass / blank",
+   "fieldname": "quality_flag",
+   "fieldtype": "Data",
+   "label": "Quality Flag"
+  },
+  {
+   "fieldname": "voucher_type",
+   "fieldtype": "Data",
+   "in_list_view": 1,
+   "in_standard_filter": 1,
+   "label": "Voucher Type"
+  },
+  {
+   "fieldname": "service_line",
+   "fieldtype": "Data",
+   "label": "Service Line"
+  },
+  {
+   "fieldname": "service_line_source",
+   "fieldtype": "Data",
+   "label": "Service Line Source"
+  },
+  {
+   "fieldname": "item_code",
+   "fieldtype": "Data",
+   "label": "Item Code"
+  },
+  {
+   "fieldname": "item_name",
+   "fieldtype": "Data",
+   "label": "Item Name"
+  }
+ ],
+ "index_web_pages_for_search": 1,
+ "links": [],
+ "modified": "2026-08-18 23:43:48.365381",
+ "modified_by": "Administrator",
+ "module": "Management Dashboard",
+ "name": "Management Fact",
+ "name_case": "Title Case",
+ "naming_rule": "Random",
+ "owner": "Administrator",
+ "permissions": [
+  {
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "System Manager",
+   "share": 1,
+   "write": 1
+  }
+ ],
+ "sort_field": "modified",
+ "sort_order": "DESC",
+ "states": []
+}

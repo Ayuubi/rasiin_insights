@@ -1,0 +1,26 @@
+{
+ "content": null,
+ "creation": "2026-08-19 06:25:55.129059",
+ "docstatus": 0,
+ "doctype": "Page",
+ "idx": 0,
+ "modified": "2026-08-19 06:25:55.129059",
+ "modified_by": "Administrator",
+ "module": "Management Dashboard",
+ "name": "management-dashboard",
+ "owner": "Administrator",
+ "page_name": "management-dashboard",
+ "roles": [
+  {
+   "role": "Accounts Manager"
+  },
+  {
+   "role": "System Manager"
+  }
+ ],
+ "script": null,
+ "standard": "Yes",
+ "style": null,
+ "system_page": 0,
+ "title": "Management Dashboard"
+}

@@ -1,0 +1,42 @@
+{
+ "actions": [],
+ "allow_rename": 1,
+ "creation": "2026-08-18 14:33:20.549393",
+ "doctype": "DocType",
+ "editable_grid": 1,
+ "engine": "InnoDB",
+ "field_order": [
+  "source_value",
+  "dimension_value"
+ ],
+ "fields": [
+  {
+   "description": "e.g. Drug",
+   "fieldname": "source_value",
+   "fieldtype": "Data",
+   "in_list_view": 1,
+   "label": "Source Value",
+   "reqd": 1
+  },
+  {
+   "description": "e.g. Pharmacy",
+   "fieldname": "dimension_value",
+   "fieldtype": "Data",
+   "in_list_view": 1,
+   "label": "Dimension Value",
+   "reqd": 1
+  }
+ ],
+ "index_web_pages_for_search": 1,
+ "istable": 1,
+ "links": [],
+ "modified": "2026-08-18 14:34:07.814618",
+ "modified_by": "Administrator",
+ "module": "Management Dashboard",
+ "name": "Management Dimension Mapping",
+ "owner": "Administrator",
+ "permissions": [],
+ "sort_field": "modified",
+ "sort_order": "DESC",
+ "states": []
+}
