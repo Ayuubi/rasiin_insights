@@ -186,6 +186,12 @@ METRICS = {
 }
 
 DERIVED = {
+    "gross_sales_je": "SUM(gross_sales) where voucher_type != 'Sales Invoice' "
+                      "— the slice of gross sales the standard Sales Register "
+                      "cannot see, because it only reads Sales Invoice. This "
+                      "is why Sales Register and dashboard net sales disagree: "
+                      "Sales Register = invoices only; dashboard net sales = "
+                      "invoices + this line - reclassified revenue (below).",
     "net_sales": "gross_sales - discount - return + return_discount "
                  "- revenue_reclass",
     "total_collections": "collection_current + collection_prior "

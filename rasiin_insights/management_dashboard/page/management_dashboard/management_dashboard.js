@@ -29,7 +29,10 @@ const GROUPS = [
 	{
 		title: 'Revenue', tone: 'rev', lines: [
 			{ key: 'gross_sales', label: 'Gross sales', metric: 'gross_sales',
-			  note: 'Before any discount' },
+			  note: 'Before any discount — invoices plus revenue booked by journal' },
+			{ key: 'gross_sales_je', label: '— of which booked by journal',
+			  metric: 'gross_sales', dim: 'Voucher Type', muted: true, monthlyOnly: true,
+			  note: 'Not on the Sales Register — this is why Gross/Net sales here differs from that report' },
 			{ key: 'discount', label: 'Less: discount given', metric: 'discount',
 			  sign: -1, note: 'Given on the invoice' },
 			{ key: 'return', label: 'Less: returns', metric: 'return', sign: -1,
@@ -641,7 +644,7 @@ class ManagementDashboard {
 
 				html += `<tr class="${cls}">
 					<td><span class="rd-lbl" data-metric="${line.metric || ''}"
-						data-key="${line.key}" data-label="${line.label}">${line.label}</span>
+						data-key="${line.key}" data-label="${line.label}" data-dim="${line.dim || ''}">${line.label}</span>
 						${line.warn ? '<span class="rd-flag">!</span>' : ''}</td>
 					<td class="${line.sign === -1 ? 'rd-neg' : ''}">${fmt(av)}</td>
 					<td class="${line.sign === -1 ? 'rd-neg' : ''}">${fmt(bv)}</td>
@@ -683,7 +686,7 @@ class ManagementDashboard {
 						}
 					}
 					return `<div class="rd-card ${g.tone} ${line.strong ? 'strong' : ''}"
-						data-metric="${line.metric || ''}" data-key="${line.key}"
+						data-metric="${line.metric || ''}" data-key="${line.key}" data-dim="${line.dim || ''}"
 						data-label="${line.label}">
 						<div class="rd-lab">${line.label}</div>
 						<div class="rd-val">${shown}</div>${delta}
@@ -700,11 +703,11 @@ class ManagementDashboard {
 	bind_explain() {
 		this.$c.find('.rd-lbl, .rd-card').on('click', (e) => {
 			const d = e.currentTarget.dataset;
-			this.explain(d.metric, d.label, d.key);
+			this.explain(d.metric, d.label, d.key, d.dim);
 		});
 	}
 
-	explain(metric, label, key) {
+	explain(metric, label, key, dim) {
 		const m = metric && this.definitions.metrics[metric];
 		const derived = this.definitions.derived || {};
 		let body = '';
@@ -729,14 +732,15 @@ class ManagementDashboard {
 		if (metric) {
 			dialog.set_primary_action('See the breakdown', () => {
 				dialog.hide();
-				this.jump_to_drill(metric, label);
+				this.jump_to_drill(metric, label, dim);
 			});
 		}
 		dialog.show();
 	}
 
-	jump_to_drill(metric, label) {
+	jump_to_drill(metric, label, dim) {
 		this.state.drill_metric = metric;
+		if (dim) this.state.drill_dimension = dim;
 		this.render_drill_controls();
 		this.refresh_drill();
 		const el = this.$c.find('.rd-drill-row')[0];
@@ -856,7 +860,7 @@ class ManagementDashboard {
 			html += `<tr class="rd-grp ${g.tone}"><td colspan="${days.length + 2}">${g.title}</td></tr>`;
 			this.daily_table_rows.push([g.title]);
 
-			g.lines.forEach(line => {
+			g.lines.filter(line => !line.monthlyOnly).forEach(line => {
 				const is_pct = g.pct || line.raw_pct;
 				const fmt = v => is_pct ? this.pct(v) : this.money(line.sign === -1 ? -v : v);
 				const vals = days.map(d => this.value_of(d, line));

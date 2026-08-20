@@ -89,6 +89,40 @@ def _snapshot_rows(months, company, dimension_type="Total"):
     """.format(" AND ".join(conditions)), values, as_dict=True)
 
 
+def _journal_revenue_rows(months, company):
+    """
+    Gross sales booked by a voucher type other than Sales Invoice — the
+    figure the standard Sales Register structurally cannot see, and the
+    reason the dashboard's gross/net sales does not match that report at
+    a glance.
+
+    No new fact rows and no backfill needed: snapshot.aggregate() already
+    writes a "Voucher Type" dimension row for every metric, including
+    gross_sales. This just reads that breakdown back and relabels it as a
+    synthetic gross_sales_je metric so _roll_up can sum it exactly like
+    any other flow metric, alongside the real ones.
+    """
+    if not months:
+        return []
+    conditions = [
+        "period IN %(months)s", "dimension_type = 'Voucher Type'",
+        "metric = 'gross_sales'", "dimension_value != 'Sales Invoice'",
+    ]
+    values = {"months": months}
+    if company:
+        conditions.append("company = %(c)s")
+        values["c"] = company
+    rows = frappe.db.sql("""
+        SELECT period, company, dimension_value, amount
+        FROM `tabManagement Snapshot`
+        WHERE {0}
+    """.format(" AND ".join(conditions)), values, as_dict=True)
+    for r in rows:
+        r["metric"] = "gross_sales_je"
+        r["quality_score"] = None
+    return rows
+
+
 def _roll_up(rows, months, granularity):
     """
     Collapse monthly rows into buckets.
@@ -140,6 +174,7 @@ def _derive(m):
     money_out = total_expense + g("refund")
     return {
         "gross_sales": g("gross_sales"),
+        "gross_sales_je": g("gross_sales_je"),
         "discount": g("discount"),
         "return": g("return"),
         "return_discount": g("return_discount"),
@@ -176,7 +211,7 @@ def get_summary(from_period, to_period, granularity="Monthly", company=None):
     trend line on the page.
     """
     months = month_list(from_period, to_period)
-    rows = _snapshot_rows(months, company)
+    rows = _snapshot_rows(months, company) + _journal_revenue_rows(months, company)
     buckets = _roll_up(rows, months, granularity)
 
     periods = []
