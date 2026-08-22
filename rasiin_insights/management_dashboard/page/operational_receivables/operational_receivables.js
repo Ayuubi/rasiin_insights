@@ -77,7 +77,7 @@ const ROUTES = [
 	{ label: 'CEO Dashboard', route: 'management-dashboard' },
 	{ label: 'Receivables & Revenue', route: 'operational-receivables', current: true },
 	{ label: 'Cash & Collections', route: 'operational-cash' },
-	// { label: 'Expenses & Payables', route: 'operational-expenses' },
+	{ label: 'Expenses & Payables', route: 'operational-payables' },
 ];
 
 const A1_PAGE_SIZE = 31;
@@ -356,27 +356,49 @@ class OperationalReceivables {
 	refresh_all() {
 		const f = this.filters;
 		if (!f.from_date || !f.to_date) return;
+		// 2026-08-22 — tag every panel's fetch with this refresh's
+		// generation. Requests are not guaranteed to resolve in the order
+		// they were fired (a slower-but-earlier request can land after a
+		// faster-but-later one), so a stale response is dropped in
+		// guarded_call() instead of overwriting a newer, correctly-filtered
+		// render — this is what caused A2 to briefly show a previous
+		// filter selection's data on 2026-08-22, confirmed against real
+		// screenshots.
+		this._req_gen = (this._req_gen || 0) + 1;
 		this.load_a1(f);
 		this.load_a2(f);
 		this.load_a3(f);
 		this.load_b1(f);
 	}
 
+	// A frappe.call() wrapper that only renders if no newer refresh_all()
+	// has started since this call was fired — see the note in refresh_all().
+	guarded_call(method, args, render) {
+		const gen = this._req_gen;
+		frappe.call({
+			method, args,
+			callback: (r) => {
+				if (gen !== this._req_gen) return;
+				render(r.message);
+			},
+		});
+	}
+
 	// ------------------------------------------------------------------- A1
 
 	load_a1(f) {
-		frappe.call({
-			method: 'rasiin_insights.management_dashboard.utils.operational_api_receivable.get_ar_rollforward',
-			args: { from_date: f.from_date, to_date: f.to_date, company: f.company },
-			callback: (r) => this.render_a1(r.message || {}),
-		});
+		this.guarded_call(
+			'rasiin_insights.management_dashboard.utils.operational_api_receivable.get_ar_rollforward',
+			{ from_date: f.from_date, to_date: f.to_date, company: f.company },
+			(d) => this.render_a1(d || {})
+		);
 	}
 
 	render_a1(d) {
 		$('#or-a1-cards').html(`
-			${this.card('Opening (start of range)', d.opening_total, false, null, 'rev')}
-			${this.card('Closing (end of range)', d.closing_total, false, null, 'rev')}
-			${this.card('Net movement', (d.closing_total || 0) - (d.opening_total || 0), false)}
+			${this.card('Opening (start of range)', d.opening_total, false, 'Real GL balance the day before the range starts', 'rev')}
+			${this.card('Closing (end of range)', d.closing_total, false, 'Real GL balance as of the "To" date — matches CEO Dashboard "Owed to us" once the month is snapshotted', 'rev')}
+			${this.card('Net movement', (d.closing_total || 0) - (d.opening_total || 0), false, 'Closing minus opening — how much the receivable grew or shrank over the range')}
 		`);
 
 		this._a1_days = d.days || [];
@@ -461,11 +483,11 @@ class OperationalReceivables {
 	// size of the "unmatched receipts" gap is never a mystery.
 
 	load_a2(f) {
-		frappe.call({
-			method: 'rasiin_insights.management_dashboard.utils.operational_api_receivable.get_ar_by_patient_type',
-			args: { as_of_date: f.to_date, company: f.company },
-			callback: (r) => this.render_a2(r.message || {}),
-		});
+		this.guarded_call(
+			'rasiin_insights.management_dashboard.utils.operational_api_receivable.get_ar_by_patient_type',
+			{ as_of_date: f.to_date, company: f.company },
+			(d) => this.render_a2(d || {})
+		);
 	}
 
 	render_a2(d) {
@@ -528,11 +550,11 @@ class OperationalReceivables {
 	// ------------------------------------------------------------------- A3
 
 	load_a3(f) {
-		frappe.call({
-			method: 'rasiin_insights.management_dashboard.utils.operational_api_receivable.get_ar_top_movers',
-			args: { from_date: f.from_date, to_date: f.to_date, company: f.company, limit: 15 },
-			callback: (r) => this.render_a3(r.message || []),
-		});
+		this.guarded_call(
+			'rasiin_insights.management_dashboard.utils.operational_api_receivable.get_ar_top_movers',
+			{ from_date: f.from_date, to_date: f.to_date, company: f.company, limit: 15 },
+			(list) => this.render_a3(list || [])
+		);
 	}
 
 	render_a3(list) {
@@ -559,17 +581,17 @@ class OperationalReceivables {
 	// get_revenue_by_item_group docstring for the exact reconciliation.
 
 	load_b1(f) {
-		frappe.call({
-			method: 'rasiin_insights.management_dashboard.utils.operational_api_receivable.get_revenue_by_item_group',
-			args: { from_date: f.from_date, to_date: f.to_date, company: f.company },
-			callback: (r) => this.render_b1(r.message || {}),
-		});
+		this.guarded_call(
+			'rasiin_insights.management_dashboard.utils.operational_api_receivable.get_revenue_by_item_group',
+			{ from_date: f.from_date, to_date: f.to_date, company: f.company },
+			(d) => this.render_b1(d || {})
+		);
 	}
 
 	render_b1(d) {
 		const byPT = d.by_patient_type || [];
 		$('#or-b1-cards').html(
-			this.card('Invoice revenue (this range)', d.total_net, false, null, 'rev') +
+			this.card('Invoice revenue (this range)', d.total_net, false, 'Net invoiced amount across all Sales Invoices posted in the range', 'rev') +
 			byPT.map(p => this.card(p.patient_type, p.net_amount, p.patient_type === 'Unclassified')).join('')
 		);
 
@@ -608,7 +630,18 @@ class OperationalReceivables {
 		});
 		$('#or-b1-table').html(html);
 		$('#or-b1-msg').html(
-			`<div>${d.message || ''}</div><div class="or-bridge-note" style="margin-top:4px">${(b.message || '')}</div>`
+			`<div>${d.message || ''}</div><div class="or-bridge-note" style="margin-top:4px">${(b.message || '')}</div>` +
+			// 2026-08-22 — this range may not fully tie to CEO Dashboard if the
+			// month is already snapshotted: this bridge reads live GL Entry,
+			// so a Journal Entry posted after CEO Dashboard's snapshot for
+			// that month was last rebuilt (backdated into an already-closed
+			// range) shows up here immediately but not there yet. Confirmed
+			// for Jan/Jul 2026: the live gap tied to the cent to that
+			// month's payment write-off figure once new journal entries
+			// covering it were posted after the snapshot.
+			`<div class="or-bridge-note" style="margin-top:4px">If this doesn't match CEO Dashboard's Net Sales for an ` +
+			`already-closed month, it's most likely a voucher posted after that month's snapshot was last rebuilt — ` +
+			`this panel is always live, CEO Dashboard updates on its own schedule.</div>`
 		);
 		this.export_rows.b1 = rows;
 	}

@@ -59,7 +59,7 @@ const ROUTES = [
 	{ label: 'CEO Dashboard', route: 'management-dashboard' },
 	{ label: 'Receivables & Revenue', route: 'operational-receivables' },
 	{ label: 'Cash & Collections', route: 'operational-cash', current: true },
-	// { label: 'Expenses & Payables', route: 'operational-expenses' },
+	{ label: 'Expenses & Payables', route: 'operational-payables' },
 ];
 
 const DAY_PAGE_SIZE = 31;
@@ -323,29 +323,48 @@ class OperationalCash {
 	refresh_all() {
 		const f = this.filters;
 		if (!f.from_date || !f.to_date) return;
+		// 2026-08-22 — tag every panel's fetch with this refresh's
+		// generation, same fix as operational_receivables.js/
+		// operational_payables.js — a slower-but-earlier request can
+		// otherwise resolve after a faster-but-later one and silently
+		// overwrite a newer, correctly-filtered render with stale data.
+		this._req_gen = (this._req_gen || 0) + 1;
 		this.load_d1(f);
 		this.load_d2(f);
 		this.load_d3(f);
 		this.load_e1(f);
 	}
 
+	// A frappe.call() wrapper that only renders if no newer refresh_all()
+	// has started since this call was fired — see the note in refresh_all().
+	guarded_call(method, args, render) {
+		const gen = this._req_gen;
+		frappe.call({
+			method, args,
+			callback: (r) => {
+				if (gen !== this._req_gen) return;
+				render(r.message);
+			},
+		});
+	}
+
 	// ------------------------------------------------------------------- D1
 
 	load_d1(f) {
-		frappe.call({
-			method: 'rasiin_insights.management_dashboard.utils.operational_api_cash.get_cash_collection_split',
-			args: { from_date: f.from_date, to_date: f.to_date, company: f.company },
-			callback: (r) => this.render_d1(r.message || {}),
-		});
+		this.guarded_call(
+			'rasiin_insights.management_dashboard.utils.operational_api_cash.get_cash_collection_split',
+			{ from_date: f.from_date, to_date: f.to_date, company: f.company },
+			(d) => this.render_d1(d || {})
+		);
 	}
 
 	render_d1(d) {
 		const totals = d.totals || {};
 		$('#oc-d1-cards').html(
-			this.card('Sales-cash', totals.sales_cash, false, null, 'cash') +
-			this.card('Debt-cash', totals.debt_cash, false) +
-			this.card('Unallocated', totals.unallocated, flt(totals.unallocated) > 0) +
-			this.card('Total collected', totals.total, false, null, 'cash')
+			this.card('Sales-cash', totals.sales_cash, false, 'Cash received against a same-day invoice', 'cash') +
+			this.card('Debt-cash', totals.debt_cash, false, 'Cash received against an older, already-invoiced balance') +
+			this.card('Unallocated', totals.unallocated, flt(totals.unallocated) > 0, 'Received but not yet tied to a specific invoice') +
+			this.card('Total collected', totals.total, false, 'Sales-cash + debt-cash + unallocated, for the range', 'cash')
 		);
 
 		this._d1_days = d.days || [];
@@ -425,15 +444,15 @@ class OperationalCash {
 	// ------------------------------------------------------------------- D2
 
 	load_d2(f) {
-		frappe.call({
-			method: 'rasiin_insights.management_dashboard.utils.operational_api_cash.get_collections_by_mode',
-			args: { from_date: f.from_date, to_date: f.to_date, company: f.company },
-			callback: (r) => this.render_d2(r.message || {}),
-		});
+		this.guarded_call(
+			'rasiin_insights.management_dashboard.utils.operational_api_cash.get_collections_by_mode',
+			{ from_date: f.from_date, to_date: f.to_date, company: f.company },
+			(d) => this.render_d2(d || {})
+		);
 	}
 
 	render_d2(d) {
-		$('#oc-d2-cards').html(this.card('Total collected (POS)', d.total, false, null, 'cash'));
+		$('#oc-d2-cards').html(this.card('Total collected (POS)', d.total, false, 'Sum of all POS payments over the range, by cashier and mode of payment', 'cash'));
 		const rows = [['Cashier', 'POS Profile', 'Mode of Payment', 'Transactions', 'Amount', 'Share']];
 		let html = '<tr>' + rows[0].map(h => `<th>${h}</th>`).join('') + '</tr>';
 		(d.rows || []).forEach(x => {
@@ -485,11 +504,11 @@ class OperationalCash {
 	// and expanded again, client-side, when a row is clicked.
 
 	load_d3(f) {
-		frappe.call({
-			method: 'rasiin_insights.management_dashboard.utils.operational_api_cash.get_cashier_reconciliation',
-			args: { from_date: f.from_date, to_date: f.to_date, company: f.company },
-			callback: (r) => this.render_d3(r.message || {}),
-		});
+		this.guarded_call(
+			'rasiin_insights.management_dashboard.utils.operational_api_cash.get_cashier_reconciliation',
+			{ from_date: f.from_date, to_date: f.to_date, company: f.company },
+			(d) => this.render_d3(d || {})
+		);
 	}
 
 	render_d3(d) {
@@ -591,11 +610,11 @@ class OperationalCash {
 	// ------------------------------------------------------------------- E1
 
 	load_e1(f) {
-		frappe.call({
-			method: 'rasiin_insights.management_dashboard.utils.operational_api_cash.get_cash_bank_position',
-			args: { from_date: f.from_date, to_date: f.to_date, company: f.company },
-			callback: (r) => this.render_e1(r.message || {}),
-		});
+		this.guarded_call(
+			'rasiin_insights.management_dashboard.utils.operational_api_cash.get_cash_bank_position',
+			{ from_date: f.from_date, to_date: f.to_date, company: f.company },
+			(d) => this.render_e1(d || {})
+		);
 	}
 
 	render_e1(d) {
@@ -604,9 +623,9 @@ class OperationalCash {
 		this._e1_page = 0;
 		const last = this._e1_days[this._e1_days.length - 1] || {};
 		$('#oc-e1-cards').html(
-			this.card('Cash on hand (latest)', last.cash_closing, false) +
-			this.card('Bank balance (latest)', last.bank_closing, false) +
-			this.card('Total cash + bank (latest)', last.total_closing, false, null, 'cash')
+			this.card('Cash on hand (latest)', last.cash_closing, false, 'Closing balance of Cash-type accounts on the last day in range') +
+			this.card('Bank balance (latest)', last.bank_closing, false, 'Closing balance of Bank-type accounts on the last day in range') +
+			this.card('Total cash + bank (latest)', last.total_closing, false, 'Cash on hand + bank balance, on the last day in range', 'cash')
 		);
 
 		const rows = [['Date', 'Cash Closing', 'Bank Closing', 'Total Closing', 'In', 'Out']];

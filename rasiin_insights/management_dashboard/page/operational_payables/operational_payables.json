@@ -1,0 +1,26 @@
+{
+ "content": null,
+ "creation": "2026-08-22 18:39:05.874201",
+ "docstatus": 0,
+ "doctype": "Page",
+ "idx": 0,
+ "modified": "2026-08-22 18:39:05.874201",
+ "modified_by": "Administrator",
+ "module": "Management Dashboard",
+ "name": "operational-payables",
+ "owner": "Administrator",
+ "page_name": "operational-payables",
+ "roles": [
+  {
+   "role": "System Manager"
+  },
+  {
+   "role": "Accounts Manager"
+  }
+ ],
+ "script": null,
+ "standard": "Yes",
+ "style": null,
+ "system_page": 0,
+ "title": "Expenses & Payables"
+}

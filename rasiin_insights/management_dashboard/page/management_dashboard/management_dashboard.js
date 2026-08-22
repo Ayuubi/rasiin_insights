@@ -33,7 +33,7 @@ const ROUTES = [
 	{ label: 'CEO Dashboard', route: 'management-dashboard', current: true },
 	{ label: 'Receivables & Revenue', route: 'operational-receivables' },
 	{ label: 'Cash & Collections', route: 'operational-cash' },
-	// { label: 'Expenses & Payables', route: 'operational-expenses' },
+	{ label: 'Expenses & Payables', route: 'operational-payables' },
 ];
 
 const GROUPS = [
@@ -283,6 +283,8 @@ class ManagementDashboard {
 			() => frappe.set_route('operational-receivables'));
 		this.page.add_menu_item('Cash & Collections (daily)',
 			() => frappe.set_route('operational-cash'));
+		this.page.add_menu_item('Expenses & Payables (daily)',
+			() => frappe.set_route('operational-payables'));
 		this.sync_filter_visibility();
 	}
 

@@ -34,6 +34,7 @@ REBUILD RULE
     are frozen and skipped.
 """
 
+import re
 import time
 
 import frappe
@@ -348,6 +349,88 @@ def build_management_facts():
     log.duration_seconds = int(time.time() - started)
     log.status = "Failed" if errors else "Success"
     log.error_log = "\n\n".join(errors)[:100000]
+    log.insert(ignore_permissions=True)
+    frappe.db.commit()
+
+
+# ------------------------------------------------------- manual rebuild button
+
+PERIOD_RE = re.compile(r"^\d{4}-(0[1-9]|1[0-2])$")
+
+
+@frappe.whitelist()
+def enqueue_manual_rebuild(period, company=None):
+    """
+    'Rebuild a period' button on Rasiin Insights Settings.
+
+    Same work build_period() always did — reachable before only via
+    `bench execute`. Deliberately ignores md_enabled / md_run_hour /
+    md_rebuild_months: those gate the *scheduler*, not a person who just
+    asked for one period by name. Runs in the background (a full period can
+    touch ~250k Management Fact rows across five extraction steps — too
+    slow to hold a web request open for), logging to Management Build Log
+    exactly like the nightly job does, so there is one place to check the
+    result of either kind of run.
+    """
+    frappe.only_for(["System Manager", "Accounts Manager"])
+
+    period = (period or "").strip()
+    if not PERIOD_RE.match(period):
+        frappe.throw('Period must be in YYYY-MM form, e.g. "2026-01".')
+    company = (company or "").strip() or None
+
+    frappe.enqueue(
+        _run_manual_rebuild,
+        queue="long",
+        timeout=1800,
+        job_name="rasiin-insights-manual-rebuild-{0}".format(period),
+        period=period,
+        company=company,
+        triggered_by=frappe.session.user,
+    )
+    return {"queued": True, "period": period, "company": company}
+
+
+def _run_manual_rebuild(period, company, triggered_by):
+    """Background worker for enqueue_manual_rebuild() — not whitelisted,
+    not meant to be called directly (use enqueue_manual_rebuild or, from a
+    terminal, build_period() itself)."""
+    from rasiin_insights.management_dashboard.utils import controls
+
+    log = frappe.new_doc("Management Build Log")
+    log.run_started = frappe.utils.now()
+    started = time.time()
+    written = 0
+
+    try:
+        build_period(period, company, dry_run=False)
+        written = frappe.db.count("Management Fact", {"period": period})
+        frappe.db.commit()
+
+        threshold = flt(extract.get_settings().md_drift_threshold or 1.0)
+        results = controls.check_period(period, company, verbose=False)
+        drifted = sum(r["drift"] for r in results.values())
+
+        lines = ["Triggered manually by {0}.".format(triggered_by), ""]
+        for comp, r in results.items():
+            for c in r["checks"]:
+                ok = abs(c["unexplained"]) <= threshold
+                lines.append("{0} / {1}: {2} — facts {3:,.2f}, ledger {4:,.2f}, "
+                              "unexplained {5:,.2f} [{6}]".format(
+                                  period, comp, c["check"], c["facts"],
+                                  c["ledger"], c["unexplained"],
+                                  "OK" if ok else "DRIFT"))
+        log.drift_detail = "\n".join(lines)
+        log.status = "Success with drift" if drifted else "Success"
+    except Exception:
+        log.status = "Failed"
+        log.error_log = frappe.get_traceback()[:100000]
+        frappe.db.rollback()
+
+    log.run_finished = frappe.utils.now()
+    log.periods_rebuilt = period
+    log.fact_rows_written = written
+    log.duration_seconds = int(time.time() - started)
     log.insert(ignore_permissions=True)
     frappe.db.commit()
 
