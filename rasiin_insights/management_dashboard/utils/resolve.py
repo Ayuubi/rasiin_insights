@@ -33,6 +33,7 @@ SOURCE_FIELD_KEYS = {
     "Company": "company",
     "Insurance Flag": "insurance_flag",
     "Customer Group": "customer_group",
+    "Source Order": "source_order",
 }
 
 UNRESOLVED = "Unclassified"

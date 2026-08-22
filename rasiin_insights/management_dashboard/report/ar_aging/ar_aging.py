@@ -21,6 +21,14 @@ WHY THIS IS ITS OWN QUERY, NOT A SNAPSHOT READ
     this reads Sales Invoice + GL Entry live, the same "fall through to the
     ledger live" rule the daily trend and Till Reconciliation both use.
 
+PATIENT TYPE (OPD/IPD) COLUMN
+    Resolved from Sales Invoice.source_order through the "Patient Type"
+    Management Dimension Rule (see patches/add_patient_type_dimension.py).
+    Only OPD and IPD are mapped so far — everything else (E.R, PACKAGE,
+    Referral, Anaesthesia, unset) reads "Unclassified" until finance
+    decides how those should bucket. Treat the OPD/IPD split as reliable;
+    treat "Unclassified" as "not decided yet", not as its own category.
+
 DATA-QUALITY GATE — read before trusting the oldest buckets
     97% of January's Payment Entry receipts were never matched to an
     invoice. An unmatched receipt still reduces the customer's GL balance
@@ -38,6 +46,11 @@ from rasiin_insights.management_dashboard.utils.resolve import (
     DimensionResolver,
     build_insurance_flag,
 )
+
+# Patient Type resolves through the same configurable Management Dimension
+# Rule/Mapping mechanism as Payer Type — see patches/add_patient_type_dimension.py
+# for what's actually seeded (OPD, IPD; everything else falls through to
+# "Unclassified" until finance decides how it should bucket).
 
 BUCKETS = [(0, 30, "0-30"), (31, 60, "31-60"), (61, 90, "61-90"),
            (91, 120, "91-120"), (121, None, "120+")]
@@ -70,6 +83,7 @@ def execute(filters=None):
         {"label": "Bucket", "fieldname": "bucket", "fieldtype": "Data", "width": 80},
         {"label": "Customer", "fieldname": "customer_name", "fieldtype": "Data", "width": 180},
         {"label": "Payer Type", "fieldname": "payer_type", "fieldtype": "Data", "width": 110},
+        {"label": "Patient Type", "fieldname": "patient_type", "fieldtype": "Data", "width": 100},
         {"label": "Company", "fieldname": "company", "fieldtype": "Link",
          "options": "Company", "width": 130},
         {"label": "Net Amount", "fieldname": "net_amount", "fieldtype": "Currency", "width": 120},
@@ -111,7 +125,7 @@ def execute(filters=None):
         "Sales Invoice", filters={"name": ["in", invoice_names]},
         fields=["name", "posting_date", "customer", "customer_name",
                 "customer_group", "is_insurance", "insurance", "company",
-                "base_net_total"])}
+                "base_net_total", "source_order"])}
 
     resolver = DimensionResolver()
     data = []
@@ -136,11 +150,14 @@ def execute(filters=None):
             "income_account": None, "warehouse": None, "company": inv.company,
             "insurance_flag": insurance_flag, "customer_group": inv.customer_group,
         })
+        patient_type, _ = resolver.resolve(
+            "Patient Type", inv.posting_date, {"source_order": inv.source_order})
 
         data.append({
             "invoice": inv.name, "posting_date": inv.posting_date, "age": age,
             "bucket": bucket, "customer_name": inv.customer_name,
-            "payer_type": dims["payer_type"], "company": inv.company,
+            "payer_type": dims["payer_type"], "patient_type": patient_type,
+            "company": inv.company,
             "net_amount": flt(inv.base_net_total),
             "paid": flt(inv.base_net_total) - outstanding,
             "outstanding": outstanding,
@@ -164,8 +181,17 @@ def execute(filters=None):
     """.format("AND company = %(company)s" if company else ""),
         {"company": company}, as_dict=True)[0].a or 0)
 
+    by_patient_type = {}
+    for d in data:
+        by_patient_type[d["patient_type"]] = by_patient_type.get(d["patient_type"], 0.0) + d["outstanding"]
+
     report_summary = [
         {"label": "Total outstanding", "value": total_outstanding, "datatype": "Currency"},
+        {"label": "OPD outstanding", "value": by_patient_type.get("OPD", 0.0), "datatype": "Currency"},
+        {"label": "IPD outstanding", "value": by_patient_type.get("IPD", 0.0), "datatype": "Currency"},
+        {"label": "Unclassified (patient type)",
+         "value": by_patient_type.get("Unclassified", 0.0), "datatype": "Currency",
+         "indicator": "Orange" if by_patient_type.get("Unclassified", 0.0) else "Green"},
         {"label": "Weighted average age (days)", "value": round(dso, 1), "datatype": "Float"},
         {"label": "120+ days", "value": by_bucket.get("120+", 0.0), "datatype": "Currency",
          "indicator": "Red" if by_bucket.get("120+", 0.0) > 0 else "Green"},

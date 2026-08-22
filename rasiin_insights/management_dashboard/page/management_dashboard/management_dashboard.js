@@ -25,6 +25,17 @@ frappe.pages['management-dashboard'].on_page_load = function (wrapper) {
 	new ManagementDashboard(page).init();
 };
 
+// Visible nav strip — added 2026-08-22 alongside the same strip on every
+// Operational Reports page, replacing the page dropdown ("...") as the
+// primary way to move between pages; that menu is hidden by default and
+// easy to miss. The dropdown items stay too, as a fallback.
+const ROUTES = [
+	{ label: 'CEO Dashboard', route: 'management-dashboard', current: true },
+	{ label: 'Receivables & Revenue', route: 'operational-receivables' },
+	{ label: 'Cash & Collections', route: 'operational-cash' },
+	// { label: 'Expenses & Payables', route: 'operational-expenses' },
+];
+
 const GROUPS = [
 	{
 		title: 'Revenue', tone: 'rev', lines: [
@@ -154,6 +165,7 @@ class ManagementDashboard {
 		this.state.company = this.filters.default_company ||
 			(this.filters.companies || [])[0] || null;
 		this.build_layout();
+		this.render_nav();
 		this.build_filter_bar();
 		this.rebuild_period_options();
 		this.render_daily_controls();
@@ -264,6 +276,13 @@ class ManagementDashboard {
 
 		this.page.set_secondary_action('Refresh', () => this.refresh());
 		this.page.add_menu_item('Print', () => window.print());
+		// Operational Reports — daily/finance pages that live alongside this
+		// one. Add each new page's route here as it's built (see the ROUTES
+		// list at the top of operational_receivables.js for the mirror of this).
+		this.page.add_menu_item('Receivables & Revenue (daily)',
+			() => frappe.set_route('operational-receivables'));
+		this.page.add_menu_item('Cash & Collections (daily)',
+			() => frappe.set_route('operational-cash'));
 		this.sync_filter_visibility();
 	}
 
@@ -295,9 +314,56 @@ class ManagementDashboard {
 
 	// --------------------------------------------------------------- layout
 
+	// ------------------------------------------------------------------- nav
+
+	// REDESIGNED 2026-08-22 — this used to be a plain text row of links
+	// ("CEO Dashboard · Receivables & Revenue · Cash & Collections") sitting
+	// right above the "Compare two periods / Focus on one" pill toggle, in
+	// a visibly different style from it. It's now the exact same segmented
+	// pill control (.rd-modes/.rd-mode) as that toggle, just switching
+	// pages instead of modes — one visual language, not two, and every
+	// Operational Reports page (operational_receivables.js,
+	// operational_cash.js) uses the identical markup/CSS for its own
+	// page-switcher, so it reads as one product everywhere.
+	// FIXED 2026-08-22: these used to be <button>s with a click handler
+	// calling frappe.set_route(). That worked for the URL/breadcrumb, but
+	// left the destination page blank until a manual browser refresh —
+	// Frappe hadn't necessarily fetched and evaluated that page's own JS
+	// bundle yet, and our own click handler had no way to wait for it.
+	// Real <a href="/app/..."> tags go through Frappe's own link-routing
+	// (the same path the left sidebar and every other in-app link uses),
+	// which does that loading correctly. data-route is kept only so the
+	// active tab can be marked without a page reload for the one already
+	// current.
+	render_nav() {
+		const html = ROUTES.map(r =>
+			`<a class="rd-mode${r.current ? ' active' : ''}" data-route="${r.route}" href="/app/${r.route}">${r.label}</a>`
+		).join('');
+		this.$c.find('#rd-suite-nav').html(html);
+
+		// FIXED 2026-08-22: the <a href> alone still went blank until a
+		// manual refresh — Frappe's own document-level link handler was
+		// intercepting the click and doing its own client-side routing
+		// before the destination page's JS was necessarily loaded, exactly
+		// like the <button> it replaced. This handler runs first (it's
+		// bound on the link itself, not on document), stops that handler
+		// from ever seeing the click, and forces a real full-page load —
+		// the same thing a manual refresh does, which is why that always
+		// "fixed" it.
+		this.$c.find('#rd-suite-nav a').on('click', (e) => {
+			if ($(e.currentTarget).hasClass('active')) { e.preventDefault(); return; }
+			e.preventDefault();
+			e.stopPropagation();
+			window.location.href = e.currentTarget.href;
+		});
+	}
+
 	build_layout() {
 		this.$c = $(`
 			<div class="rd">
+				<div class="rd-topbar">
+					<div class="rd-modes" id="rd-suite-nav"></div>
+				</div>
 				<div class="rd-bar">
 					<div class="rd-modes">
 						<button class="rd-mode active" data-mode="compare">Compare two periods</button>
@@ -368,14 +434,18 @@ class ManagementDashboard {
 				--good:#15803d; --bad:#b91c1c; --amber:#a16207;
 				padding-bottom:60px; color:var(--ink); }
 
+			.rd-topbar { margin-bottom:12px; }
+
 			.rd-bar { display:flex; align-items:center; justify-content:space-between;
 				gap:12px; flex-wrap:wrap; margin:2px 0 16px; }
 			.rd-modes { display:inline-flex; background:#f1f5f9; border-radius:10px;
 				padding:3px; }
 			.rd-mode { border:0; background:transparent; padding:7px 18px;
-				border-radius:8px; font-size:13px; cursor:pointer; color:var(--dim); }
+				border-radius:8px; font-size:13px; cursor:pointer; color:var(--dim);
+				display:inline-block; text-decoration:none; line-height:1.4; }
 			.rd-mode.active { background:#fff; color:var(--navy); font-weight:600;
-				box-shadow:0 1px 3px rgba(15,23,42,.12); }
+				box-shadow:0 1px 3px rgba(15,23,42,.12); cursor:default; }
+			.rd-mode:not(.active):hover { color:var(--navy); text-decoration:none; }
 			.rd-scope { font-size:12px; color:var(--dim); }
 
 			.rd-health { padding:11px 15px; border-radius:10px; font-size:13px;
@@ -505,9 +575,18 @@ class ManagementDashboard {
 
 		$(this.page.wrapper).find('.page-form').removeClass('hide').show();
 
-		this.$c.find('.rd-mode').on('click', (e) => {
+		// BUG FIXED 2026-08-22: this used to do
+		// `this.$c.find('.rd-mode').removeClass('active')` — fine when
+		// .rd-mode only existed on these two buttons, but once the
+		// page-switcher tab bar (also .rd-mode, for the same pill look)
+		// was added, clicking "Focus on one" here wiped the "active" class
+		// off the CEO Dashboard tab too, since that query matches every
+		// .rd-mode on the page, not just these two. Scoped to this
+		// specific .rd-modes group now — each pill toggle only ever
+		// touches its own siblings.
+		this.$c.find('.rd-bar .rd-modes .rd-mode').on('click', (e) => {
 			this.state.mode = e.currentTarget.dataset.mode;
-			this.$c.find('.rd-mode').removeClass('active');
+			$(e.currentTarget).siblings('.rd-mode').removeClass('active');
 			$(e.currentTarget).addClass('active');
 			this.sync_filter_visibility();
 			this.refresh();

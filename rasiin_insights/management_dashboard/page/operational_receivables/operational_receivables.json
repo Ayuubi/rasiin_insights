@@ -1,0 +1,26 @@
+{
+ "content": null,
+ "creation": "2026-08-20 19:40:09.462246",
+ "docstatus": 0,
+ "doctype": "Page",
+ "idx": 0,
+ "modified": "2026-08-20 19:40:29.166119",
+ "modified_by": "Administrator",
+ "module": "Management Dashboard",
+ "name": "operational-receivables",
+ "owner": "Administrator",
+ "page_name": "operational-receivables",
+ "roles": [
+  {
+   "role": "Accounts Manager"
+  },
+  {
+   "role": "System Manager"
+  }
+ ],
+ "script": null,
+ "standard": "Yes",
+ "style": null,
+ "system_page": 0,
+ "title": "Receivables & Revenue"
+}

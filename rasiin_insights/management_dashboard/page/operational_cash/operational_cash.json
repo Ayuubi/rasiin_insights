@@ -1,0 +1,26 @@
+{
+ "content": null,
+ "creation": "2026-08-22 09:31:29.417503",
+ "docstatus": 0,
+ "doctype": "Page",
+ "idx": 0,
+ "modified": "2026-08-22 09:31:29.417503",
+ "modified_by": "Administrator",
+ "module": "Management Dashboard",
+ "name": "operational-cash",
+ "owner": "Administrator",
+ "page_name": "operational-cash",
+ "roles": [
+  {
+   "role": "System Manager"
+  },
+  {
+   "role": "Accounts Manager"
+  }
+ ],
+ "script": null,
+ "standard": "Yes",
+ "style": null,
+ "system_page": 0,
+ "title": "Cash & Collections"
+}

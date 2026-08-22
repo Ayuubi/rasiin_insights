@@ -23,7 +23,7 @@
    "fieldtype": "Select",
    "in_list_view": 1,
    "label": "Dimension",
-   "options": "\nChannel\nEntity\nPayer Type\nService Line"
+   "options": "\nChannel\nEntity\nPayer Type\nService Line\nPatient Type"
   },
   {
    "default": "1",
@@ -37,7 +37,7 @@
    "fieldtype": "Select",
    "in_list_view": 1,
    "label": "Source Field",
-   "options": "\nItem Group\nSales Type\nCost Center\nIncome Account\nWarehouse\nCompany\nInsurance Flag\nCustomer Group"
+   "options": "\nItem Group\nSales Type\nCost Center\nIncome Account\nWarehouse\nCompany\nInsurance Flag\nCustomer Group\nSource Order"
   },
   {
    "fieldname": "valid_from",
@@ -73,7 +73,7 @@
  ],
  "index_web_pages_for_search": 1,
  "links": [],
- "modified": "2026-08-18 15:33:02.808860",
+ "modified": "2026-08-20 19:16:30.742858",
  "modified_by": "Administrator",
  "module": "Management Dashboard",
  "name": "Management Dimension Rule",
