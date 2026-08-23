@@ -318,7 +318,20 @@ def build_management_facts():
     Rebuilds the recent periods in full. Idempotent by construction — every
     build function deletes its own metrics for the period before inserting,
     so a re-run produces identical output rather than duplicates.
+
+    FIXED 2026-08-23 — this used to stop at "rebuilt, N rows written" and
+    never call controls.check_period(), so Management Build Log's Drift
+    Detail was always blank for a nightly/scheduled run even though the
+    exact same field gets filled in on a manual "Rebuild a Period" run
+    (see _run_manual_rebuild below). Confirmed live: the first automatic
+    run (2026-08-23 02:00, periods 2026-07/2026-08) wrote 555,854 fact
+    rows and logged Success, but Drift Detail was empty — this was the
+    bug, not a fluke. Now every rebuilt period also runs the same drift
+    check the button does, so both kinds of run produce the same shape of
+    log — one place to check the result of either, not two.
     """
+    from rasiin_insights.management_dashboard.utils import controls
+
     settings = extract.get_settings()
     if not settings.md_enabled:
         return
@@ -333,12 +346,28 @@ def build_management_facts():
     periods = recent_periods(int(settings.md_rebuild_months or 2))
     written = 0
     errors = []
+    drift_lines = []
+    any_drift = False
+    threshold = flt(settings.md_drift_threshold or 1.0)
 
     for period in periods:
         try:
             build_period(period, dry_run=False)
             written += frappe.db.count("Management Fact", {"period": period})
             frappe.db.commit()
+
+            results = controls.check_period(period, verbose=False)
+            for comp, r in results.items():
+                for c in r["checks"]:
+                    ok = abs(c["unexplained"]) <= threshold
+                    if not ok:
+                        any_drift = True
+                    drift_lines.append(
+                        "{0} / {1}: {2} — facts {3:,.2f}, ledger {4:,.2f}, "
+                        "unexplained {5:,.2f} [{6}]".format(
+                            period, comp, c["check"], c["facts"],
+                            c["ledger"], c["unexplained"],
+                            "OK" if ok else "DRIFT"))
         except Exception:
             errors.append("{0}\n{1}".format(period, frappe.get_traceback()))
             frappe.db.rollback()
@@ -347,7 +376,13 @@ def build_management_facts():
     log.periods_rebuilt = ", ".join(periods)
     log.fact_rows_written = written
     log.duration_seconds = int(time.time() - started)
-    log.status = "Failed" if errors else "Success"
+    if errors:
+        log.status = "Failed"
+    elif any_drift:
+        log.status = "Success with drift"
+    else:
+        log.status = "Success"
+    log.drift_detail = "\n".join(drift_lines)
     log.error_log = "\n\n".join(errors)[:100000]
     log.insert(ignore_permissions=True)
     frappe.db.commit()

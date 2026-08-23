@@ -34,6 +34,7 @@ const ROUTES = [
 	{ label: 'Receivables & Revenue', route: 'operational-receivables' },
 	{ label: 'Cash & Collections', route: 'operational-cash' },
 	{ label: 'Expenses & Payables', route: 'operational-payables' },
+	{ label: 'Stock', route: 'operational-stock' },
 ];
 
 const GROUPS = [

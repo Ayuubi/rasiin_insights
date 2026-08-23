@@ -60,6 +60,7 @@ const ROUTES = [
 	{ label: 'Receivables & Revenue', route: 'operational-receivables' },
 	{ label: 'Cash & Collections', route: 'operational-cash', current: true },
 	{ label: 'Expenses & Payables', route: 'operational-payables' },
+	{ label: 'Stock', route: 'operational-stock' },
 ];
 
 const DAY_PAGE_SIZE = 31;
